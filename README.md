@@ -25,8 +25,25 @@ QuantFlow is an AI-powered options analytics platform that provides hedge fund-g
 
 **Phase 1: Classical Pricing** ✅
 - Black-Scholes, Binomial Tree, Monte Carlo pricing
-- **Native C++ Kernel**: High-performance engine for stochastic simulations (see `models/native/`)
+- **Native C++ Kernel**: High-performance options pricing (see `models/native/pricing_kernel.cpp`)
+- **Native Rust Risk Engine**: Ultra-low latency risk calibration (see `models/native/risk_engine.rs`)
 - Ensemble fair value estimation
+
+## 📸 Dashboard Preview
+
+### 📊 Executive Summary & Position Sizer
+Real-time pricing, mispricing detection, and AI-powered market regime analysis.
+![Dashboard Summary](docs/images/dashboard_summary.png)
+
+### 📐 Interactive Greeks Analysis
+Visualizing option sensitivity (Delta/Gamma) across stock price ranges.
+![Greeks Chart](docs/images/greeks_chart.png)
+
+### ⚠️ Scenario Stress Testing
+Simulating portfolio P&L under Bull, Bear, and Crisis market conditions.
+![Risk Scenarios](docs/images/risk_scenarios.png)
+
+### 📈 Detailed Features
 - Full Greeks calculation (Δ, Γ, Θ, ν, ρ)
 - Delta-neutral hedging strategy
 
