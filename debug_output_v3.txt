@@ -1,0 +1,40 @@
+DEBUG: Starting Pricing Diagnosis...
+DEBUG: Initializing QuantFlow(NVDA, start=140.0, 2026-04-17)
+
+======================================================================
+🚀 QUANTFLOW OPTIONS INTELLIGENCE SYSTEM v2.0
+======================================================================
+
+📊 Analyzing: NVDA $140.0 CALL 2026-04-17
+   Date: 2026-01-14 13:56:28
+
+
+============================================================
+📊 Fetching Market Data for NVDA $140.0 CALL 2026-04-17
+============================================================
+
+✓ Loading cached historical data for NVDA
+✓ Loading cached historical data for NVDA
+✓ Loading cached option chain for 2026-04-17
+✓ Dividend yield: 2.00%
+
+============================================================
+✓ Data Summary:
+  Current Spot: $185.81
+  Option Strike: $140.0
+  Market Price: $48.22
+  Implied Vol: 0.00%
+  Risk-Free Rate: 3.56%
+  Days to Expiry: 92
+============================================================
+
+S: 185.80999755859375
+r: 0.03559999942779541
+sigma: 1.0000000000000003e-05
+T: 0.25205479452054796
+Checking Binomial Tree...
+DEBUG: BinomialTreeModel floored sigma from 1.0000000000000003e-05 to 0.01
+u: 1.0007102588672723
+d: 0.9992902452423379
+p: 0.5552051960038996
+Binomial Price: 46.12629021925358

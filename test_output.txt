@@ -1,0 +1,14 @@
+Fetching data...
+
+======================================================================
+Traceback (most recent call last):
+  File "N:\quantflow\test_pricing.py", line 12, in <module>
+    qf.fetch_data()
+    ~~~~~~~~~~~~~^^
+  File "N:\quantflow\main.py", line 45, in fetch_data
+    print(f"\U0001f680 QUANTFLOW OPTIONS INTELLIGENCE SYSTEM v2.0")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\NAMISH\miniconda3\Lib\encodings\cp1252.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\U0001f680' in position 0: character maps to <undefined>
