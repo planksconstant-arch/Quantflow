@@ -1,6 +1,6 @@
 # QuantFlow - Options Intelligence System
 
-## 🚀 Quick Start
+##  Quick Start
 
 ```bash
 # Install dependencies
@@ -21,19 +21,22 @@ QuantFlow is an AI-powered options analytics platform that provides hedge fund-g
 
 ### Core Features
 
+**🚀 Live Demo**: [Launch QuantFlow App](https://quantflow.streamlit.app)
+
 **Phase 1: Classical Pricing** ✅
 - Black-Scholes, Binomial Tree, Monte Carlo pricing
+- **Native C++ Kernel**: High-performance engine for stochastic simulations (see `models/native/`)
 - Ensemble fair value estimation
 - Full Greeks calculation (Δ, Γ, Θ, ν, ρ)
 - Delta-neutral hedging strategy
 
-**Phase 2: ML Intelligence** ✅
+* ML Intelligence** ✅
 - GARCH + ML volatility forecasting
 - XGBoost mispricing detection with SHAP explainability
 - Hidden Markov Model regime detection (4 states)
 - Monte Carlo scenario analysis with VaR/CVaR
 
-**Phase 3: Deliverables** ✅
+* Deliverables** ✅
 - 9-page professional slide deck content
 - 1-page executive dashboard memo
 - Comprehensive visualizations
