@@ -29,28 +29,28 @@ QuantFlow is an AI-powered options analytics platform that provides hedge fund-g
 
 [![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy?repository=planksconstant-arch/Quantflow&branch=main&mainModule=app.py)
 
-**Phase 1: Classical Pricing** ✅
+ Classical Pricing** ✅
 - Black-Scholes, Binomial Tree, Monte Carlo pricing
 - **Native C++ Kernel**: High-performance options pricing (see `models/native/pricing_kernel.cpp`)
 - **Native Rust Risk Engine**: Ultra-low latency risk calibration (see `models/native/risk_engine.rs`)
 - Ensemble fair value estimation
 - Full Greeks calculation (Δ, Γ, Θ, ν, ρ)
 
-**Phase 2: Neural SDEs & AI** ✅🆕
+* Neural SDEs & AI** ✅🆕
 - **Neural Stochastic Differential Equations**: Learn market dynamics from data ([docs](docs/NEURAL_SDE.md))
 - **GAN-Based Training**: Wasserstein GAN for realistic path generation
 - **GPU-Accelerated**: PyTorch + torchsde for fast training (10-50x speedup)
 - **Data-Driven Pricing**: Replace parametric models with learned processes
 - **Free APIs**: Trained on yfinance historical data
 
-**Phase 3: Deep Reinforcement Learning** ✅🆕
+ Deep Reinforcement Learning** ✅🆕
 - **Dynamic Hedging**: PPO agent learns optimal rebalancing ([docs](docs/DEEP_HEDGING.md))
 - **LSTM Policy**: Recurrent network for regime awareness
 - **Transaction Costs**: Almgren-Chriss model (spread + market impact)
 - **Benchmarking**: Outperforms classical delta hedging by 15-30% Sharpe
 - **Gymnasium Environment**: Custom RL environment for option hedging
 
-**Phase 4: Market Microstructure** ✅🆕
+Market Microstructure** ✅🆕
 - **Hawkes Processes**: Self-exciting models for order flow ([docs](docs/MICROSTRUCTURE.md))
 - **Bull Rise Detection**: Regime identification via branching ratio
 - **LOB Analytics**: Order book imbalance, Kyle's Lambda
