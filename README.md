@@ -1,5 +1,11 @@
 # QuantFlow - Options Intelligence System
 
+![CI Status](https://github.com/planksconstant-arch/Quantflow/actions/workflows/ci.yml/badge.svg)
+[![codecov](https://codecov.io/gh/planksconstant-arch/Quantflow/branch/main/graph/badge.svg)](https://codecov.io/gh/planksconstant-arch/Quantflow)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+[![Documentation](https://img.shields.io/badge/docs-sphinx-blue)](https://planksconstant-arch.github.io/Quantflow/)
+
 ##  Quick Start
 
 ```bash
