@@ -35,6 +35,13 @@ QuantFlow is an AI-powered options analytics platform that provides hedge fund-g
 - **Native Rust Risk Engine**: Ultra-low latency risk calibration (see `models/native/risk_engine.rs`)
 - Ensemble fair value estimation
 
+**Phase 2: Neural SDEs & AI** ✅ 🆕
+- **Neural Stochastic Differential Equations**: Learn market dynamics from data
+- **GAN-Based Training**: Generative Adversarial Networks for path generation
+- **GPU-Accelerated**: PyTorch + torchsde for fast training
+- **Data-Driven Pricing**: Replace parametric models with learned processes
+- Integrated with existing pricing engine
+
 ## 📸 Dashboard Preview
 
 ### 📊 Executive Summary & Position Sizer
