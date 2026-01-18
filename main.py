@@ -11,6 +11,7 @@ from data import MarketDataFetcher
 from models import BlackScholesModel, BinomialTreeModel, MonteCarloSimulation, GreeksCalculator
 from models.ml import VolatilityForecaster, MispricingDetector, RegimeDetector
 from analysis import ScenarioAnalyzer
+from models.risk.risk_manager import PositionSizer
 from utils import config, time_to_maturity, format_currency, format_percentage
 
 
@@ -39,7 +40,7 @@ class QuantFlow:
         self.sigma = None
         self.q = None
         
-    def fetch_data(self):
+    def fetch_data(self, force_refresh: bool = False):
         """Fetch all market data"""
         print(f"\n{'='*70}")
         print(f"🚀 QUANTFLOW OPTIONS INTELLIGENCE SYSTEM v2.0")
@@ -47,7 +48,7 @@ class QuantFlow:
         print(f"\n📊 Analyzing: {config.get_option_identifier()}")
         print(f"   Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         
-        self.market_data = self.data_fetcher.get_all_market_data()
+        self.market_data = self.data_fetcher.get_all_market_data(force_refresh=force_refresh)
         
         # Extract key parameters
         self.S = self.market_data['spot_price']
@@ -96,11 +97,30 @@ class QuantFlow:
         
         # Ensemble
         ensemble_price = (bs_price + binomial_european + mc_price) / 3
+        
+        # Fallback if pricing fails or returns near-zero (when it shouldn't)
+        if ensemble_price < 0.01:
+             print("⚠ Ensemble price near zero, using fallback calculation")
+             ensemble_price = max(bs_price, 0.01)
+
         print(f"\n✨ Ensemble Fair Value:  {format_currency(ensemble_price)}")
         
-        # Market price
-        market_price = self.market_data['option']['lastPrice']
-        print(f"💰 Market Price:  {format_currency(market_price)}")
+        # Market price logic with Stale Data Protection
+        raw_market_price = self.market_data['option']['lastPrice']
+        is_model_valid = self.market_data['option'].get('model_is_valid', True)
+        
+        market_price = raw_market_price
+        price_source = "Market Data"
+        
+        # Fallback Conditions:
+        # 1. Explicitly flagged as invalid by fetcher (Arbitrage detected)
+        # 2. Price is zero/negative
+        if not is_model_valid or raw_market_price <= 0.01:
+             print(f"⚠ NOTICE: Market Data Stale/Invalid (Last: {raw_market_price}). Using FAIR VALUE.")
+             market_price = ensemble_price
+             price_source = "Fair Value (Est)"
+             
+        print(f"💰 Market Price:  {format_currency(market_price)} [{price_source}]")
         
         # Divergence
         divergence = ((ensemble_price - market_price) / market_price) * 100
@@ -238,9 +258,30 @@ class QuantFlow:
         if self.S is None:
             self.fetch_data()
         
+        # Risk Management & Position Sizing
+        sizer = PositionSizer(portfolio_value=100000) # Default $100k portfolio
+        
+        # Calculate optimal stop loss (2 SD move)
+        suggested_stop = sizer.suggest_stop_loss(self.S, self.sigma, self.T * 365)
+        
+        # Get sizing recommendation
+        # If we are BUYING, entry is the option price (Fair Value preferred if market is stale)
+        pricing = self.get_ensemble_pricing()
+        entry_price = pricing['market_price']
+        
+        sizing = sizer.calculate_position_size(entry_price, stop_loss_price=entry_price * 0.5) # Assuming 50% max loss on option
+        
+        print(f"\n{'='*70}")
+        print(f"🛡️ RISK MANAGEMENT & SIZING")
+        print(f"{'='*70}\n")
+        print(f"Portfolio: $100,000  |  Max Risk: 2%  |  Stop Loss: 50% of Premium")
+        print(f"Recommended Position: {sizing['recommended_contracts']} contracts")
+        print(f"Cost: {format_currency(sizing['total_cost'])} ({sizing['pct_portfolio']:.1f}% of Portfolio)")
+        print(f"Max Risk: {format_currency(sizing['total_risk'])}")
+        
         analyzer = ScenarioAnalyzer(
             self.S, self.K, self.T, self.r, self.sigma,
-            self.option_type, self.q, position_size=1
+            self.option_type, self.q, position_size=sizing['recommended_contracts']
         )
         
         # Standard scenarios

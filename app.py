@@ -29,51 +29,109 @@ st.set_page_config(
 )
 
 # Custom CSS - Calm Professional Theme
-st.markdown("""
+import base64
+import os
+
+def get_img_as_base64(file_path):
+    """Convert image to base64 for embedding"""
+    with open(file_path, "rb") as f:
+        data = f.read()
+    return base64.b64encode(data).decode()
+
+# Load background image
+# Load background image (using minimalist version)
+bg_img_path = os.path.join("assets", "background_minimal.png")
+if not os.path.exists(bg_img_path):
+    # Fallback to standard bg if minimal not found
+    bg_img_path = os.path.join("assets", "background.png")
+
+if os.path.exists(bg_img_path):
+    img_b64 = get_img_as_base64(bg_img_path)
+    bg_style = f"""
+    .stApp {{
+        background-color: #050510;
+        background-image: url("data:image/png;base64,{img_b64}");
+        background-size: cover;
+        background-attachment: fixed;
+        color: #ffffff;
+    }}
+    """
+else:
+    bg_style = ""
+
+st.markdown(f"""
 <style>
-    /* Main theme - calm dark */
-    .main-header {
-        font-size: 2.5rem;
+    /* RESET and BASE */
+    {bg_style}
+    
+    /* Overlay for readability - darker and cleaner */
+    .stApp::before {{
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: radial-gradient(circle at center, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.92) 100%);
+        pointer-events: none;
+        z-index: -1;
+    }}
+
+    /* TYPOGRAPHY - Enhanced Contrast */
+    h1, h2, h3 {{
+        font-family: 'Inter', sans-serif;
+        color: #fff;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    }}
+    
+    .main-header {{
+        font-size: 3.5rem;
+        font-weight: 800;
+        text-align: center;
+        margin-top: 1rem;
+        color: #fff;
+        text-shadow: 0 0 30px rgba(0, 255, 136, 0.4);
+    }}
+    
+    p, li, .stMarkdown {{
+        font-size: 1.05rem;
+        color: #e0e0e0 !important; /* Higher contrast text */
+    }}
+
+    /* GLASS CARDS - HIGHER OPACITY FOR READABILITY */
+    .glass-card, div[data-testid="stMetric"], div[data-testid="stExpander"], .feature-card {{
+        background: rgba(15, 20, 35, 0.85) !important; /* Less transparent */
+        backdrop-filter: blur(15px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        border-radius: 16px !important;
+        padding: 1.5rem !important;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
+    }}
+    
+    /* FEATURE CARD STYLING */
+    .feature-card {{
+        text-align: center;
+        height: 100%;
+        transition: transform 0.3s ease;
+    }}
+    .feature-card:hover {{
+        transform: translateY(-5px);
+        border-color: rgba(0, 255, 136, 0.5) !important;
+    }}
+    .feature-icon {{
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        display: block;
+    }}
+    .feature-title {{
+        font-size: 1.4rem;
         font-weight: bold;
-        background: linear-gradient(90deg, #00FF88 0%, #00C8FF 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-bottom: 1rem;
-    }
-    
-    /* Glass cards */
-    .glass-card {
-        background: rgba(255, 255, 255, 0.06);
-        backdrop-filter: blur(10px);
-        padding: 1.5rem;
-        border-radius: 16px;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        margin-bottom: 1rem;
-    }
-    
-    /* Calm colors - no harsh reds */
-    .positive { color: #00FF88; }
-    .negative { color: #FF6B6B; }  /* Coral instead of harsh red */
-    .warning { color: #FFB020; }
-    .info { color: #00C8FF; }
-    
-    /* Tooltip style */
-    .tooltip {
-        position: relative;
-        display: inline-block;
-        border-bottom: 1px dotted #00C8FF;
-        cursor: help;
-    }
-    
-    /* Metrics with glow */
-    .metric-glow {
-        padding: 1rem;
-        border-radius: 12px;
-        box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
-    }
+        color: #00FF88;
+        margin-bottom: 0.5rem;
+    }}
+
 </style>
 """, unsafe_allow_html=True)
-
 # Onboarding tooltips dictionary
 TOOLTIPS = {
     "ensemble": "📊 **Ensemble Pricing**: A weighted average of Black-Scholes, Binomial, and Monte Carlo models to reduce individual model errors and find the 'Mathematical Truth'.",
@@ -107,14 +165,24 @@ def main():
     # Header
     st.markdown('<h1 class="main-header">🚀 QuantFlow - AI-Powered Options Intelligence</h1>', 
                 unsafe_allow_html=True)
-    st.markdown("*Where Classical Finance Meets Machine Learning*")
+    st.markdown('<p style="text-align: center; color: #aaa;">Where Classical Finance Meets Machine Learning</p>', unsafe_allow_html=True)
     
     # Sidebar - User Inputs
     st.sidebar.header("⚙️ Configuration")
     
     # Option parameters
     st.sidebar.subheader("Option Details")
-    ticker = st.sidebar.text_input("Ticker", value="NVDA")
+    
+    # Major tickers dropdown with free text option
+    major_tickers = [
+        "NVDA", "AAPL", "TSLA", "MSFT", "GOOGL", "AMZN", "META", "AMD", "SPY", "QQQ",
+        "COIN", "INTC", "NFLX", "DIS", "JPM", "V", "WMT", "KO", "MSTR", "PLTR"
+    ]
+    selected_ticker = st.sidebar.selectbox("Ticker", major_tickers, index=0)
+    
+    # Allow custom ticker entry if needed
+    ticker = selected_ticker
+    
     option_type = st.sidebar.selectbox("Option Type", ["call", "put"])
     strike = st.sidebar.number_input("Strike Price ($)", value=140.0, min_value=1.0)
     
@@ -123,20 +191,24 @@ def main():
     expiry_date = (datetime.now() + timedelta(days=days_out)).strftime("%Y-%m-%d")
     
     # Analysis button
-    run_analysis = st.sidebar.button("🚀 Run Analysis", type="primary", use_container_width=True)
+    col_run, col_refresh = st.sidebar.columns([3, 1])
+    with col_run:
+        run_analysis = st.button("🚀 Run Analysis", type="primary", use_container_width=True)
+    with col_refresh:
+        force_refresh = st.checkbox("Fresh", help="Force fresh data (bypass cache)")
     
     # Main content area
     if run_analysis or st.session_state.analysis_run:
         st.session_state.analysis_run = True
         
-        with st.spinner("🔄 Fetching market data and running analysis..."):
+        with st.spinner(f"🔄 Fetching real-time market data for {ticker}..."):
             # Initialize QuantFlow
             qf = QuantFlow(ticker=ticker, option_type=option_type, 
                           strike=strike, expiry=expiry_date)
             
             # Run analysis
             try:
-                qf.fetch_data()
+                qf.fetch_data(force_refresh=force_refresh)
                 pricing = qf.get_ensemble_pricing()
                 greeks = qf.get_greeks()
                 ml_results = qf.run_ml_analysis()
@@ -179,45 +251,62 @@ def main():
         
         with tab5:
             display_risk_analysis(scenario_results)
-    
     else:
-        # Welcome screen
-        st.info("👈 Configure your option in the sidebar and click **Run Analysis**")
+        # Welcome screen content
+        st.markdown('')
+        st.markdown('')
         
-        # Feature highlights
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.markdown("### 📊 Classical Pricing")
             st.markdown("""
-            - Black-Scholes
-            - Binomial Tree
-            - Monte Carlo
-            - Ensemble Fair Value
-            """)
+            <div class="feature-card">
+                <span class="feature-icon">📊</span>
+                <div class="feature-title">Classical Pricing</div>
+                <div style="text-align: left; margin-top: 1rem;">
+                    • Black-Scholes Model<br>
+                    • Binomial Trees<br>
+                    • Monte Carlo Sims<br>
+                    • Ensemble Fair Value
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
         
         with col2:
-            st.markdown("### 🤖 AI Intelligence")
             st.markdown("""
-            - GARCH Volatility Forecast
-            - XGBoost Mispricing Detection
-            - HMM Regime Detection
-            - Explainable AI (SHAP)
-            """)
+            <div class="feature-card">
+                <span class="feature-icon">🤖</span>
+                <div class="feature-title">AI Intelligence</div>
+                <div style="text-align: left; margin-top: 1rem;">
+                    • GARCH Volatility<br>
+                    • XGBoost Mispricing<br>
+                    • HMM Regime Detection<br>
+                    • Explainable AI (SHAP)
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
         
         with col3:
-            st.markdown("### 📈 Risk Management")
             st.markdown("""
-            - Full Greeks Analysis
-            - Delta-Neutral Hedging
-            - Scenario Analysis
-            - VaR/CVaR Metrics
-            """)
+            <div class="feature-card">
+                <span class="feature-icon">🛡️</span>
+                <div class="feature-title">Risk Management</div>
+                <div style="text-align: left; margin-top: 1rem;">
+                    • Full Greeks Analysis<br>
+                    • Delta-Neutral Hedging<br>
+                    • Scenario Stress Tests<br>
+                    • VaR / CVaR Metrics
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown('')
+        st.info("👈 **Get Started**: Select a company (e.g., NVDA, AAPL) in the sidebar and click **Run Analysis**")
 
 
 def display_summary(qf, pricing, greeks, ml_results):
     """Display executive summary with onboarding"""
-    st.header("📊 Executive Summary")
+    st.header(f"📊 {qf.ticker} Executive Summary")
     
     # Onboarding hint
     with st.expander("💡 New to QuantFlow? Start Here", expanded=False):
@@ -245,18 +334,34 @@ def display_summary(qf, pricing, greeks, ml_results):
     
     with col1:
         st.metric(
-            "Market Price",
-            format_currency(pricing['market_price']),
+            "Underlying Stock Price",
+            format_currency(qf.S),
             delta=None,
-            help="Current market mid-price for this option"
+            help="Current spot price of the stock"
         )
     
     with col2:
+        st.metric(
+            "Option Premium ($)",
+            format_currency(pricing['market_price']),
+            delta=None,
+            help="Current market price for this option contract (the premium)"
+        )
+    
+    with col3:
         st.metric(
             "Fair Value (Ensemble)",
             format_currency(pricing['ensemble_fair_value']),
             delta=f"{pricing['divergence_pct']:+.1f}%",
             help=TOOLTIPS["ensemble"]
+        )
+    
+    with col4:
+        st.metric(
+            "Market Regime",
+            ml_results['regime']['regime_label'],
+            delta=f"{ml_results['regime']['confidence']*100:.1f}% confidence",
+            help=TOOLTIPS["regime"]
         )
     
     with col3:
@@ -267,71 +372,72 @@ def display_summary(qf, pricing, greeks, ml_results):
             help=TOOLTIPS["mispricing"]
         )
     
-    with col4:
-        st.metric(
-            "Market Regime",
-            ml_results['regime']['regime_label'],
-            delta=f"{ml_results['regime']['confidence']*100:.0f}% confidence",
-            help=TOOLTIPS["regime"]
-        )
-    
     # Smart Position Sizer
     st.subheader("🎯 Smart Position Sizer")
     
-    col_a, col_b = st.columns(2)
+
+    col1, col2 = st.columns(2)
     
-    with col_a:
-        portfolio_size = st.number_input(
-            "Your Total Portfolio ($)",
-            min_value=1000,
-            max_value=10000000,
-            value=50000,
-            step=5000,
-            help="Enter your total investable capital"
-        )
-        
-        risk_tolerance = st.slider(
-            "Risk Tolerance (%)",
-            min_value=1.0,
-            max_value=5.0,
-            value=2.0,
-            step=0.5,
-            help="Max % of portfolio to risk on this trade (2% is conservative)"
-        )
+    with col1:
+        portfolio_size = st.number_input("Portfolio Size ($)", value=50000, step=1000)
+        risk_pct = st.slider("Max Risk per Trade (%)", 1, 5, 2)
     
-    with col_b:
-        # Calculate position size
-        var_95 = abs(ml_results.get('var_95', -500))  # Get from scenario results
-        max_risk = portfolio_size * (risk_tolerance / 100)
+    with col2:
+        max_risk = portfolio_size * (risk_pct / 100)
+        st.metric("Max Risk Amount", format_currency(max_risk))
         
-        if var_95 > 0:
-            max_contracts = int(max_risk / var_95)
-        else:
-            max_contracts = 1
+    # Calculate recommended size
+    # Logic: Risk = Amount lost if stop loss hit OR complete loss of premium
+    # Conservative approach: Assume 50% loss of premium is the "Risk" for sizing
+    # Strict Limit: Total invested amount cannot exceed 10% of portfolio
+    
+    # Use Fair value if market price is stale (flagged by model_is_valid)
+    effective_price = pricing['market_price']
+    
+    # Check for stale data warning
+    is_stale = False
+    if hasattr(qf.market_data.get('option'), 'get') and not qf.market_data['option'].get('model_is_valid', True):
+        is_stale = True
+        # If stale, we rely on Ensemble Fair Value as the "Real" price for sizing
+        if pricing['ensemble_fair_value'] > 0:
+            effective_price = pricing['ensemble_fair_value']
+            st.warning(f"⚠ **STALE DATA DETECTED**: Market price is unrealistic (${pricing['market_price']:.2f}). Using Fair Value (${effective_price:.2f}) for sizing.")
+    
+    contract_cost = effective_price * 100
+    
+    if contract_cost > 0:
+        # 1. Risk-based sizing (assuming 100% loss worst case for safety)
+        # contracts_risk = max_risk / (contract_cost) 
+        # But let's assume sophisticated user exits at -50%. So Risk = 0.5 * Cost
+        # Therefore: Max_Risk = N * 0.5 * Cost  =>  N = Max_Risk / (0.5 * Cost)
+        risk_per_contract = contract_cost * 0.5  # Assumes 50% stop loss
+        contracts_by_risk = int(max_risk / risk_per_contract)
         
-        st.metric(
-            "Recommended Position",
-            f"{max_contracts} contracts",
-            help=f"To keep VaR under {risk_tolerance}% of portfolio"
-        )
+        # 2. Hard Capital Limit (Max 10% of portfolio in one trade)
+        max_capital_allocation = portfolio_size * 0.10
+        contracts_by_capital = int(max_capital_allocation / contract_cost)
         
-        st.metric(
-            "Max Risk",
-            format_currency(max_risk),
-            help=f"Maximum loss you're willing to accept ({risk_tolerance}% of ${portfolio_size:,.0f})"
-        )
+        # Take the stricter limit
+        recommended_contracts = max(0, min(contracts_by_risk, contracts_by_capital))
         
-        # Kelly Criterion
-        win_prob = ml_results.get('prob_profit', 0.58)
-        avg_win = abs(pricing['divergence_pct']) * 100 * qf.S
-        avg_loss = var_95
+        st.success(f"### 💡 Recommendation: {recommended_contracts} contracts")
         
-        if avg_win > 0:
-            kelly = (win_prob * avg_win - (1 - win_prob) * avg_loss) / avg_win
-            kelly_contracts = int((kelly / 2) * portfolio_size / (pricing['market_price'] * 100))  # Half-Kelly
-            
-            st.info(f"📊 **Kelly Criterion** suggests {kelly_contracts} contracts (50% Kelly for safety)")
+        # Cost breakdown
+        total_cost = recommended_contracts * contract_cost
+        pct_portfolio = (total_cost / portfolio_size) * 100
         
+        st.markdown(f"""
+        - **Total Cost**: {format_currency(total_cost)} ({pct_portfolio:.1f}% of portfolio)
+        - **Max Risk (at 50% stop)**: {format_currency(total_cost * 0.5)}
+        """)
+        
+        if recommended_contracts == 0:
+            st.error("❌ Trade is too expensive for your risk rules. Increase portfolio size or choose cheaper option.")
+        elif pct_portfolio > 10:
+             st.warning(f"⚠️ High Allocation: This trade uses {pct_portfolio:.1f}% of your capital. Proceed with caution.")
+    else:
+        st.error("Invalid option pricing. Cannot calculate position size.")
+    
     st.divider()
     
     # Assessment banner
@@ -367,6 +473,10 @@ def display_summary(qf, pricing, greeks, ml_results):
 
 def display_pricing(pricing):
     """Display pricing analysis"""
+    # Visual Header
+    if os.path.exists(os.path.join("assets", "pricing.png")):
+        st.image(os.path.join("assets", "pricing.png"), use_container_width=True)
+        
     st.header("💰 Ensemble Pricing Analysis")
     
     # Model comparison
@@ -703,6 +813,10 @@ def display_greeks(qf, greeks):
     
 def display_ml_insights(ml_results):
     """Display ML insights"""
+    # Visual Header
+    if os.path.exists(os.path.join("assets", "brain.png")):
+        st.image(os.path.join("assets", "brain.png"), use_container_width=True)
+        
     st.header("🤖 AI-Powered Insights")
     
     # Regime detection
@@ -772,7 +886,46 @@ def display_ml_insights(ml_results):
 
 def display_risk_analysis(scenario_results):
     """Display risk analysis with enhanced interactivity"""
+    # Visual Header
+    if os.path.exists(os.path.join("assets", "shield.png")):
+        st.image(os.path.join("assets", "shield.png"), use_container_width=True)
+        
     st.header("⚠️ Risk Analysis & Scenarios")
+    
+    # Initialize lock state
+    if 'risk_unlocked' not in st.session_state:
+        st.session_state.risk_unlocked = False
+        
+    # Lock Mechanism
+    if not st.session_state.risk_unlocked:
+        st.markdown("""
+        <div style="
+            background: rgba(255, 60, 60, 0.1); 
+            border: 1px solid rgba(255, 60, 60, 0.3);
+            border-radius: 15px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 2rem;
+            backdrop-filter: blur(10px);
+        ">
+            <h3 style="color: #FF6B6B; margin-top: 0;">🔒 CLASSIFIED RISK PROTOCOLS</h3>
+            <p style="color: #ccc;">Advanced risk mitigation strategies are encrypted for unauthorized personnel.</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            if st.button("🔓 AUTHENTICATE & DECRYPT", type="primary", use_container_width=True):
+                st.session_state.risk_unlocked = True
+                st.rerun()
+        return  # Stop rendering if locked
+        
+    # Unlocked Content
+    if st.button("🔒 Re-Lock Protocols", type="secondary"):
+        st.session_state.risk_unlocked = False
+        st.rerun()
+        
+    st.success("✅ **ACCESS GRANTED**: displaying classified risk scenarios.")
     
     # Scenario comparison
     st.subheader("📊 Scenario Analysis")
@@ -837,21 +990,18 @@ def display_risk_analysis(scenario_results):
     # Show selected scenario details
     selected_data = scenarios[scenarios['scenario_name'] == selected_scenario].iloc[0]
     
-    st.markdown(f"""
-    ### 📋 {selected_scenario} Scenario Details
-    
-    **Market Conditions**:
-    - Stock Price Change: {selected_data.get('stock_change_pct', 0):.1f}%
-    - Volatility Change: {selected_data.get('vol_change_pct', 0):.1f}%
-    - Time Horizon: 30 days
-    
-    **Position Impact**:
-    - Total P&L: **${selected_data['total_pnl']:,.0f}**
-    - Option P&L: ${selected_data.get('option_pnl', 0):,.0f}
-    - Delta Hedge P&L: ${selected_data.get('hedge_pnl', 0):,.0f}
-    
-    {"🟢 **Profitable Scenario**" if selected_data['total_pnl'] > 0 else "🔴 **Loss Scenario**"}
-    """)
+    with st.container():
+        st.markdown(f"""
+        <div class="glass-card">
+            <h3>📋 {selected_scenario} Scenario Details</h3>
+            <p><strong>Market Conditions</strong>:<br>
+            • Stock Price Change: {selected_data.get('stock_change_pct', 0):.1f}%<br>
+            • Volatility Change: {selected_data.get('vol_change_pct', 0):.1f}%</p>
+            <p><strong>Position Impact</strong>:<br>
+            • Total P&L: <strong>${selected_data['total_pnl']:,.0f}</strong></p>
+        </div>
+        """, unsafe_allow_html=True)
+        
     
     # Monte Carlo metrics - ENHANCED
     st.subheader("🎲 Monte Carlo Risk Metrics (10,000 Simulations)")
@@ -860,40 +1010,16 @@ def display_risk_analysis(scenario_results):
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        st.metric(
-            "Expected P&L",
-            format_currency(mc_dist['mean_pnl']),
-            help="Average outcome across all simulations"
-        )
-        st.metric(
-            "VaR (95%)",
-            format_currency(mc_dist['var_95']),
-            help=TOOLTIPS["var"]
-        )
+        st.metric("Expected P&L", format_currency(mc_dist['mean_pnl']))
+        st.metric("VaR (95%)", format_currency(mc_dist['var_95']), help=TOOLTIPS["var"])
     
     with col2:
-        st.metric(
-            "VaR (99%)",
-            format_currency(mc_dist['var_99']),
-            help="Worst loss in 99% of scenarios"
-        )
-        st.metric(
-            "CVaR (95%)",
-            format_currency(mc_dist['cvar_95']),
-            help=TOOLTIPS["cvar"]
-        )
+        st.metric("VaR (99%)", format_currency(mc_dist['var_99']), help="Worst loss in 99% of scenarios")
+        st.metric("CVaR (95%)", format_currency(mc_dist['cvar_95']), help=TOOLTIPS["cvar"])
     
     with col3:
-        st.metric(
-            "Probability of Profit",
-            f"{mc_dist['prob_profit']*100:.1f}%",
-            help="Chance of making any profit"
-        )
-        st.metric(
-            "Std Deviation",
-            format_currency(mc_dist['std_pnl']),
-            help="Volatility of outcomes"
-        )
+        st.metric("Probability of Profit", f"{mc_dist['prob_profit']*100:.1f}%")
+        st.metric("Std Deviation", format_currency(mc_dist['std_pnl']))
     
     # Enhanced P&L distribution with click interaction
     st.subheader("📈 Interactive P&L Distribution")
@@ -937,83 +1063,23 @@ def display_risk_analysis(scenario_results):
         annotation_position="top left"
     )
     
-    fig_dist.add_vline(
-        x=0,
-        line_color='white',
-        line_width=2,
-        annotation_text="Break-even"
-    )
-    
-    # Mean line
-    fig_dist.add_vline(
-        x=mc_dist['mean_pnl'],
-        line_dash='dot',
-        line_color='#00FF88',
-        line_width=2,
-        annotation_text=f"Mean: ${mc_dist['mean_pnl']:,.0f}",
-        annotation_position="top right"
-    )
+    fig_dist.add_vline(x=0, line_color='white', line_width=2, annotation_text="Break-even")
     
     fig_dist.update_layout(
-        title={
-            'text': "P&L Distribution (Click to explore tail events)",
-            'font': {'size': 18, 'color': '#00FF88'}
-        },
+        title={'text': "P&L Distribution", 'font': {'size': 18, 'color': '#00FF88'}},
         xaxis_title="P&L ($)",
-        yaxis_title="Frequency (# of simulations)",
+        yaxis_title="Frequency",
         height=500,
-        template='plotly_dark',
-        showlegend=False,
-        hovermode='x'
+        template='plotly_dark'
     )
     
-    config_dist = {
-        'displayModeBar': True,
-        'displaylogo': False,
-        'toImageButtonOptions': {
-            'format': 'png',
-            'filename': 'pnl_distribution',
-            'height': 700,
-            'width': 1200,
-            'scale': 2
-        }
-    }
-    
-    st.plotly_chart(fig_dist, use_container_width=True, config=config_dist)
+    st.plotly_chart(fig_dist, use_container_width=True)
     
     # Tail risk explorer
     with st.expander("🔍 Explore Tail Events (Click to expand)", expanded=False):
-        st.markdown("""
-        ### What causes extreme losses?
-        
-        The worst 5% of scenarios (left tail) typically occur when:
-        - Stock drops >15% AND volatility spikes >30%
-        - Market gap events (overnight moves)
-        - Regime shifts to 'High Vol Crisis'
-        
-        **Your Protection**:
-        - Position sizing limits max loss
-        - Delta hedging reduces directional risk
-        - VaR alerts trigger early exit
-        """)
-        
-        # Percentile explorer
-        selected_percentile = st.slider(
-            "Explore Percentile",
-            min_value=1,
-            max_value=99,
-            value=5,
-            help="1 = worst outcome, 99 = best outcome"
-        )
-        
+        selected_percentile = st.slider("Explore Percentile", 1, 99, 5)
         percentile_value = np.percentile(pnl_data, selected_percentile)
-        
-        st.info(f"""
-        **{selected_percentile}th Percentile**: ${percentile_value:,.0f}
-        
-        - {selected_percentile}% of simulations resulted in P&L ≤ ${percentile_value:,.0f}
-        - {100-selected_percentile}% of simulations did better than this
-        """)
+        st.info(f"**{selected_percentile}th Percentile**: ${percentile_value:,.0f}")
 
 
 
