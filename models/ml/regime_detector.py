@@ -94,7 +94,7 @@ class RegimeDetector:
         --------
         dict : Training results
         """
-        print(f"\n🔮 Training Hidden Markov Model ({self.n_states} states)...")
+        print(f"\nTraining Hidden Markov Model ({self.n_states} states)...")
         
         # Standardize features
         self.scaler_mean = features.mean()
@@ -143,7 +143,7 @@ class RegimeDetector:
         state_df = state_df.sort_values(['avg_vol', 'avg_return'])
         state_df['regime_label'] = self.regime_labels
         
-        print(f"\n✓ Regime Characteristics:")
+        print(f"\nRegime Characteristics:")
         for idx, row in state_df.iterrows():
             print(f"   {row['regime_label']}: "
                   f"Return={row['avg_return']*252*100:+.1f}% ann., "
@@ -326,7 +326,7 @@ class RegimeDetector:
                     'from_regime': self.regime_labels[states[-2]],
                     'to_regime': self.regime_labels[states[-1]],
                     'transition_probability': transition_prob,
-                    'alert': f"🚨 REGIME SHIFT: {self.regime_labels[states[-2]]} → {self.regime_labels[states[-1]]} "
+                    'alert': f"REGIME SHIFT: {self.regime_labels[states[-2]]} -> {self.regime_labels[states[-1]]} "
                             f"(probability: {transition_prob*100:.1f}%)"
                 }
         

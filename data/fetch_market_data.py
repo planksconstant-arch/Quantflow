@@ -22,7 +22,7 @@ class MarketDataFetcher:
         
     def _get_fallback_historical_data(self, days: int) -> pd.DataFrame:
         """Generate realistic fallback historical data"""
-        print(f"⚠ Generating fallback historical data for {self.ticker}")
+        print(f"! Generating fallback historical data for {self.ticker}")
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
         dates = pd.date_range(start=start_date, end=end_date, freq='B')
@@ -51,7 +51,7 @@ class MarketDataFetcher:
         if self.use_cache and os.path.exists(cache_file):
             cache_age_hours = (datetime.now().timestamp() - os.path.getmtime(cache_file)) / 3600
             if not force_refresh and cache_age_hours < 0.25: # 15 minutes cache
-                print(f"✓ Loading cached historical data for {self.ticker}")
+                print(f"Loading cached historical data for {self.ticker}")
                 return joblib.load(cache_file)
         
         print(f"Fetching {days} days of historical data for {self.ticker}...")
@@ -71,11 +71,11 @@ class MarketDataFetcher:
             # Cache result
             os.makedirs(config.CACHE_DIR, exist_ok=True)
             joblib.dump(df, cache_file)
-            print(f"✓ Fetched {len(df)} trading days")
+            print(f"Fetched {len(df)} trading days")
             return df
             
         except Exception as e:
-            print(f"⚠ Error fetching history: {e}. Using fallback.")
+            print(f"! Error fetching history: {e}. Using fallback.")
             return self._get_fallback_historical_data(days)
     
     def fetch_option_chain(self, expiry: str = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -86,7 +86,7 @@ class MarketDataFetcher:
         if self.use_cache and os.path.exists(cache_file):
             cache_age_hours = (datetime.now().timestamp() - os.path.getmtime(cache_file)) / 3600
             if cache_age_hours < 1:
-                print(f"✓ Loading cached option chain for {expiry}")
+                print(f"Loading cached option chain for {expiry}")
                 return joblib.load(cache_file)
         
         print(f"Fetching option chain for {self.ticker} expiring {expiry}...")
@@ -97,7 +97,7 @@ class MarketDataFetcher:
             joblib.dump((calls, puts), cache_file)
             return calls, puts
         except Exception as e:
-            print(f"⚠ Error fetching options: {e}. Using simulated chain.")
+            print(f"! Error fetching options: {e}. Using simulated chain.")
             # Generate simulated chain centered around current price
             spot = self.get_current_spot_price()
             strikes = np.arange(int(spot*0.8), int(spot*1.2), 5)
@@ -144,7 +144,7 @@ class MarketDataFetcher:
             # If Market Price is significantly below Intrinsic Value, it's stale data
             # Allow small buffer ($0.50) for spread variance, but not $100+
             if last_price < (intrinsic_value - 1.0):
-                print(f"⚠ DATA ERROR: Price ${last_price:.2f} < Intrinsic ${intrinsic_value:.2f}. Data is stale.")
+                print(f"! DATA ERROR: Price ${last_price:.2f} < Intrinsic ${intrinsic_value:.2f}. Data is stale.")
                 return False
                 
             # Check 2: Zero or negative price
@@ -182,7 +182,7 @@ class MarketDataFetcher:
             option['model_is_valid'] = is_valid
             
             if not is_valid:
-                print("⚠ Fetched option data is invalid/stale. Marking for fallback pricing.")
+                print("! Fetched option data is invalid/stale. Marking for fallback pricing.")
                 # We do NOT overwrite price here, we flag it so the main app knows to use Fair Value
                 
             # Ensure IV is not zero
@@ -192,7 +192,7 @@ class MarketDataFetcher:
             return option
             
         except Exception as e:
-            print(f"⚠ Costructing fallback option: {e}")
+            print(f"! Costructing fallback option: {e}")
             return pd.Series({
                 'strike': strike,
                 'lastPrice': 15.50,  # Mock price
@@ -238,7 +238,7 @@ class MarketDataFetcher:
             pass
             
         # Return fallback VIX aligned with history
-        print("⚠ Using fallback VIX data")
+        print("! Using fallback VIX data")
         hist = self.fetch_historical_data(days)
         vix_df = pd.DataFrame(index=hist.index)
         vix_df['Close'] = 20.0 + np.random.normal(0, 2, len(hist)) # Mean 20
@@ -247,7 +247,7 @@ class MarketDataFetcher:
     def get_all_market_data(self, force_refresh: bool = False) -> Dict:
         """Fetch all market data with guaranteed validity"""
         print(f"\n{'='*60}")
-        print(f"📊 Fetching Market Data for {config.get_option_identifier()}")
+        print(f"Fetching Market Data for {config.get_option_identifier()}")
         print(f"{'='*60}\n")
         
         # 1. Historical
@@ -275,7 +275,7 @@ class MarketDataFetcher:
             'vix': vix,
         }
         
-        print(f"✓ Data Ready: Spot=${spot:.2f}, IV={opt['impliedVolatility']:.2%}")
+        print(f"Data Ready: Spot=${spot:.2f}, IV={opt['impliedVolatility']:.2%}")
         return data
 
 if __name__ == "__main__":

@@ -43,9 +43,9 @@ class QuantFlow:
     def fetch_data(self, force_refresh: bool = False):
         """Fetch all market data"""
         print(f"\n{'='*70}")
-        print(f"🚀 QUANTFLOW OPTIONS INTELLIGENCE SYSTEM v2.0")
+        print(f"QUANTFLOW OPTIONS INTELLIGENCE SYSTEM v2.0")
         print(f"{'='*70}")
-        print(f"\n📊 Analyzing: {config.get_option_identifier()}")
+        print(f"\nAnalyzing: {config.get_option_identifier()}")
         print(f"   Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         
         self.market_data = self.data_fetcher.get_all_market_data(force_refresh=force_refresh)
@@ -66,13 +66,13 @@ class QuantFlow:
             self.fetch_data()
         
         print(f"\n{'='*70}")
-        print(f"💵 ENSEMBLE PRICING ANALYSIS")
+        print(f"ENSEMBLE PRICING ANALYSIS")
         print(f"{'='*70}\n")
         
         # Black-Scholes
         bs = BlackScholesModel(self.S, self.K, self.T, self.r, self.sigma, self.q)
         bs_price = bs.price(self.option_type)
-        print(f"🔹 Black-Scholes:  {format_currency(bs_price)}")
+        print(f"  Black-Scholes:  {format_currency(bs_price)}")
         
         # Binomial Tree
         binomial = BinomialTreeModel(
@@ -81,8 +81,8 @@ class QuantFlow:
         )
         binomial_european = binomial.price(self.option_type, 'european')
         binomial_american = binomial.price(self.option_type, 'american')
-        print(f"🔹 Binomial (European):  {format_currency(binomial_european)}")
-        print(f"🔹 Binomial (American):  {format_currency(binomial_american)}")
+        print(f"  Binomial (European):  {format_currency(binomial_european)}")
+        print(f"  Binomial (American):  {format_currency(binomial_american)}")
         
         # Monte Carlo
         mc = MonteCarloSimulation(
@@ -92,7 +92,7 @@ class QuantFlow:
         mc_result = mc.price(self.option_type)
         mc_price = mc_result['price']
         mc_ci = (mc_result['ci_95_lower'], mc_result['ci_95_upper'])
-        print(f"🔹 Monte Carlo:  {format_currency(mc_price)} "
+        print(f"  Monte Carlo:  {format_currency(mc_price)} "
               f"[95% CI: {format_currency(mc_ci[0])} - {format_currency(mc_ci[1])}]")
         
         # Ensemble
@@ -100,10 +100,10 @@ class QuantFlow:
         
         # Fallback if pricing fails or returns near-zero (when it shouldn't)
         if ensemble_price < 0.01:
-             print("⚠ Ensemble price near zero, using fallback calculation")
+             print("! Ensemble price near zero, using fallback calculation")
              ensemble_price = max(bs_price, 0.01)
 
-        print(f"\n✨ Ensemble Fair Value:  {format_currency(ensemble_price)}")
+        print(f"\nEnsemble Fair Value:  {format_currency(ensemble_price)}")
         
         # Market price logic with Stale Data Protection
         raw_market_price = self.market_data['option']['lastPrice']
@@ -116,24 +116,24 @@ class QuantFlow:
         # 1. Explicitly flagged as invalid by fetcher (Arbitrage detected)
         # 2. Price is zero/negative
         if not is_model_valid or raw_market_price <= 0.01:
-             print(f"⚠ NOTICE: Market Data Stale/Invalid (Last: {raw_market_price}). Using FAIR VALUE.")
+             print(f"! NOTICE: Market Data Stale/Invalid (Last: {raw_market_price}). Using FAIR VALUE.")
              market_price = ensemble_price
              price_source = "Fair Value (Est)"
              
-        print(f"💰 Market Price:  {format_currency(market_price)} [{price_source}]")
+        print(f"Market Price:  {format_currency(market_price)} [{price_source}]")
         
         # Divergence
         divergence = ((ensemble_price - market_price) / market_price) * 100
         divergence_dollars = ensemble_price - market_price
         
-        print(f"\n📊 Divergence:  {format_currency(divergence_dollars)} ({divergence:+.2f}%)")
+        print(f"\nDivergence:  {format_currency(divergence_dollars)} ({divergence:+.2f}%)")
         
         if abs(divergence) < 2:
-            assessment = "✅ FAIRLY PRICED"
+            assessment = "FAIRLY PRICED"
         elif divergence > 0:
-            assessment = "🟢 UNDERVALUED (Market < Fair Value)"
+            assessment = "UNDERVALUED (Market < Fair Value)"
         else:
-            assessment = "🔴 OVERVALUED (Market > Fair Value)"
+            assessment = "OVERVALUED (Market > Fair Value)"
         
         print(f"   Assessment: {assessment}\n")
         
@@ -156,7 +156,7 @@ class QuantFlow:
             self.fetch_data()
         
         print(f"\n{'='*70}")
-        print(f"📐 GREEKS ANALYSIS")
+        print(f"GREEKS ANALYSIS")
         print(f"{'='*70}\n")
         
         calc = GreeksCalculator(
@@ -199,7 +199,7 @@ class QuantFlow:
         results['regime'] = current_regime
         
         print(f"\n{'='*70}")
-        print(f"🔮 MARKET REGIME ANALYSIS")
+        print(f"MARKET REGIME ANALYSIS")
         print(f"{'='*70}\n")
         print(f"Current Regime: {current_regime['regime_label']}")
         print(f"Confidence: {current_regime['confidence']*100:.1f}%\n")
@@ -208,7 +208,7 @@ class QuantFlow:
         base_greeks = self.get_greeks()
         adjusted_greeks = regime_detector.regime_adjusted_greeks(base_greeks, current_regime)
         
-        print(f"📊 Regime-Adjusted Greeks:")
+        print(f"Regime-Adjusted Greeks:")
         print(f"   Delta: {adjusted_greeks['delta']:.4f} "
               f"[{adjusted_greeks['delta_lower']:.4f} - {adjusted_greeks['delta_upper']:.4f}]")
         print(f"   Gamma: {adjusted_greeks['gamma']:.4f} (×{adjusted_greeks['gamma']/base_greeks['gamma']:.2f})")
@@ -219,7 +219,7 @@ class QuantFlow:
         # === MISPRICING DETECTION ===
         # Note: Would need historical training data - demo version
         print(f"\n{'='*70}")
-        print(f"🎯 MISPRICING DETECTION")
+        print(f"MISPRICING DETECTION")
         print(f"{'='*70}\n")
         
         # Calculate mispricing features
@@ -239,11 +239,11 @@ class QuantFlow:
         mispricing_score = min(pricing_score + vol_score, 100)
         
         if mispricing_score > 70:
-            mispricing_assessment = "🟢 STRONG MISPRICING SIGNAL"
+            mispricing_assessment = "STRONG MISPRICING SIGNAL"
         elif mispricing_score > 40:
-            mispricing_assessment = "🟡 MODERATE MISPRICING"
+            mispricing_assessment = "MODERATE MISPRICING"
         else:
-            mispricing_assessment = "⚪ FAIRLY PRICED"
+            mispricing_assessment = "FAIRLY PRICED"
         
         print(f"\nMispricing Score: {mispricing_score:.1f}/100")
         print(f"Assessment: {mispricing_assessment}")
@@ -272,7 +272,7 @@ class QuantFlow:
         sizing = sizer.calculate_position_size(entry_price, stop_loss_price=entry_price * 0.5) # Assuming 50% max loss on option
         
         print(f"\n{'='*70}")
-        print(f"🛡️ RISK MANAGEMENT & SIZING")
+        print(f"RISK MANAGEMENT & SIZING")
         print(f"{'='*70}\n")
         print(f"Portfolio: $100,000  |  Max Risk: 2%  |  Stop Loss: 50% of Premium")
         print(f"Recommended Position: {sizing['recommended_contracts']} contracts")
@@ -298,7 +298,7 @@ class QuantFlow:
     def run_phase2_demo(self):
         """Run complete Phase 2 demonstration"""
         print("\n" + "="*70)
-        print("🎯 QUANTFLOW PHASE 2 DEMONSTRATION - ML ESSENTIALS")
+        print("QUANTFLOW PHASE 2 DEMONSTRATION - ML ESSENTIALS")
         print("="*70)
         
         # Fetch data
@@ -316,25 +316,25 @@ class QuantFlow:
         
         # Summary
         print(f"\n{'='*70}")
-        print(f"✅ PHASE 2 COMPLETE - EXECUTIVE SUMMARY")
+        print(f"PHASE 2 COMPLETE - EXECUTIVE SUMMARY")
         print(f"{'='*70}\n")
         
-        print(f"📊 Option:  {config.get_option_identifier()}")
-        print(f"💰 Market: {format_currency(pricing['market_price'])}  |  Fair Value: {format_currency(pricing['ensemble_fair_value'])}")
-        print(f"📈 {pricing['assessment']}")
+        print(f"Option:  {config.get_option_identifier()}")
+        print(f"Market: {format_currency(pricing['market_price'])}  |  Fair Value: {format_currency(pricing['ensemble_fair_value'])}")
+        print(f"{pricing['assessment']}")
         
-        print(f"\n🔮 Regime: {ml_results['regime']['regime_label']} ({ml_results['regime']['confidence']*100:.1f}% confidence)")
+        print(f"\nRegime: {ml_results['regime']['regime_label']} ({ml_results['regime']['confidence']*100:.1f}% confidence)")
         print(f"   {ml_results['adjusted_greeks']['recommendation']}")
         
-        print(f"\n🎯 Mispricing: {ml_results['mispricing_score']:.0f}/100 - {ml_results['mispricing_assessment']}")
+        print(f"\nMispricing: {ml_results['mispricing_score']:.0f}/100 - {ml_results['mispricing_assessment']}")
         
         mc_dist = scenario_results['monte_carlo_distribution']
-        print(f"\n📊 30-Day P&L (Monte Carlo):")
+        print(f"\n30-Day P&L (Monte Carlo):")
         print(f"   Mean: {format_currency(mc_dist['mean_pnl'])}  |  VaR(95%): {format_currency(mc_dist['var_95'])}")
         print(f"   Probability of Profit: {format_percentage(mc_dist['prob_profit'])}")
         
         print(f"\n{'='*70}")
-        print(f"✨ Next Steps: Phase 3 - Deliverables (Slides + Memo)")
+        print(f"Next Steps: Phase 3 - Deliverables (Slides + Memo)")
         print(f"{'='*70}\n")
         
         return {
