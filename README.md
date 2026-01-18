@@ -136,7 +136,7 @@ quantflow/
 
 ```bash
 # Clone repository
-git clone https://github.com/yourusername/quantflow.git
+git clone https://github.com/planksconstant-arch/Quantflow.git
 cd quantflow
 
 # Create virtual environment (recommended)
