@@ -77,7 +77,7 @@ class VolatilityForecaster:
         --------
         dict : GARCH model results
         """
-        print(f"\n📊 Fitting GARCH({p},{q}) model...")
+        print(f"\nFitting GARCH({p},{q}) model...")
         
         # Fit GARCH model
         model = arch_model(
@@ -95,7 +95,7 @@ class VolatilityForecaster:
         alpha = res.params['alpha[1]'] if 'alpha[1]' in res.params else 0
         beta = res.params['beta[1]'] if 'beta[1]' in res.params else 0
         
-        print(f"✓ GARCH parameters: ω={omega:.6f}, α={alpha:.4f}, β={beta:.4f}")
+        print(f"GARCH parameters: ω={omega:.6f}, α={alpha:.4f}, β={beta:.4f}")
         print(f"  Persistence (α+β): {alpha + beta:.4f}")
         
         # Forecast
@@ -183,7 +183,7 @@ class VolatilityForecaster:
         --------
         dict : ML model and evaluation results
         """
-        print(f"\n🤖 Training ML volatility forecaster...")
+        print(f"\nTraining ML volatility forecaster...")
         
         # Create features
         X, y = self.create_ml_features()
@@ -194,7 +194,7 @@ class VolatilityForecaster:
         y_clean = y[valid_idx]
         
         if len(X_clean) < 100:
-            print("⚠ Insufficient data for ML training")
+            print("! Insufficient data for ML training")
             return None
         
         # Train-test split (walk-forward)
@@ -231,7 +231,7 @@ class VolatilityForecaster:
         train_r2 = r2_score(y_train, y_pred_train)
         test_r2 = r2_score(y_test, y_pred_test)
         
-        print(f"✓ Train RMSE: {train_rmse:.4f} | Test RMSE: {test_rmse:.4f}")
+        print(f" Train RMSE: {train_rmse:.4f} | Test RMSE: {test_rmse:.4f}")
         print(f"  Train R²: {train_r2:.4f} | Test R²: {test_r2:.4f}")
         
         # Feature importance
@@ -240,7 +240,7 @@ class VolatilityForecaster:
             'importance': model.feature_importances_
         }).sort_values('importance', ascending=False)
         
-        print(f"\n📊 Top 5 Features:")
+        print(f"\nTop 5 Features:")
         for idx, row in feature_importance.head(5).iterrows():
             print(f"   {row['feature']}: {row['importance']:.3f}")
         
@@ -272,7 +272,7 @@ class VolatilityForecaster:
         dict : Volatility forecasts from all models
         """
         print(f"\n{'='*70}")
-        print(f"📈 VOLATILITY FORECAST ({horizon}-day horizon)")
+        print(f"VOLATILITY FORECAST ({horizon}-day horizon)")
         print(f"{'='*70}\n")
         
         forecasts = {}
@@ -282,14 +282,14 @@ class VolatilityForecaster:
         hv_60 = annualized_volatility(self.returns, 60).iloc[-1]
         forecasts['historical_20d'] = hv_20
         forecasts['historical_60d'] = hv_60
-        print(f"📊 Historical Vol (20-day): {hv_20*100:.2f}%")
-        print(f"📊 Historical Vol (60-day): {hv_60*100:.2f}%")
+        print(f"Historical Vol (20-day): {hv_20*100:.2f}%")
+        print(f"Historical Vol (60-day): {hv_60*100:.2f}%")
         
         # 2. GARCH forecast
         garch_result = self.fit_garch(p=1, q=1)
         garch_forecast = garch_result['forecast_5day'][horizon-1]
         forecasts['garch'] = garch_forecast
-        print(f"📈 GARCH Forecast: {garch_forecast*100:.2f}%")
+        print(f"GARCH Forecast: {garch_forecast*100:.2f}%")
         
         # 3. ML forecast (if possible)
         ml_result = self.train_ml_forecaster()
@@ -302,13 +302,13 @@ class VolatilityForecaster:
                 X_scaled = ml_result['scaler'].transform(X_latest)
                 ml_forecast = ml_result['model'].predict(X_scaled)[0]
                 forecasts['ml'] = ml_forecast
-                print(f"🤖 ML Forecast: {ml_forecast*100:.2f}%")
+                print(f"ML Forecast: {ml_forecast*100:.2f}%")
         
         # 4. Ensemble (average of available forecasts)
         ensemble_forecast = np.mean([v for v in forecasts.values()])
         forecasts['ensemble'] = ensemble_forecast
         
-        print(f"\n✨ ENSEMBLE FORECAST: {ensemble_forecast*100:.2f}%")
+        print(f"\nENSEMBLE FORECAST: {ensemble_forecast*100:.2f}%")
         
         return forecasts
 
