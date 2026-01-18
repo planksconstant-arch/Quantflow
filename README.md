@@ -27,7 +27,7 @@ QuantFlow is an AI-powered options analytics platform that provides hedge fund-g
 
 ### Core Features
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](http://localhost:8502)
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy?repository=planksconstant-arch/Quantflow&branch=main&mainModule=app.py)
 
  Classical Pricing** ✅
 - Black-Scholes, Binomial Tree, Monte Carlo pricing
