@@ -95,8 +95,8 @@ class VolatilityForecaster:
         alpha = res.params['alpha[1]'] if 'alpha[1]' in res.params else 0
         beta = res.params['beta[1]'] if 'beta[1]' in res.params else 0
         
-        print(f"GARCH parameters: ω={omega:.6f}, α={alpha:.4f}, β={beta:.4f}")
-        print(f"  Persistence (α+β): {alpha + beta:.4f}")
+        print(f"GARCH parameters: omega={omega:.6f}, alpha={alpha:.4f}, beta={beta:.4f}")
+        print(f"  Persistence (alpha+beta): {alpha + beta:.4f}")
         
         # Forecast
         forecast = res.forecast(horizon=5)

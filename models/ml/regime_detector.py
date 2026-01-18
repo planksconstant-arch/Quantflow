@@ -347,5 +347,5 @@ if __name__ == "__main__":
     
     # Predict current regime
     current_regime = detector.predict_regime(features.tail(1))
-    print(f"\n📊 Current Regime: {current_regime['regime_label']}")
+    print(f"\nCurrent Regime: {current_regime['regime_label']}")
     print(f"   Confidence: {current_regime['confidence']*100:.1f}%")

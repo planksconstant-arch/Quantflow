@@ -183,7 +183,7 @@ class MispricingDetector:
         --------
         dict : Training results
         """
-        print(f"\n🎯 Training Mispricing Detector...")
+        print(f"\nTraining Mispricing Detector...")
         
         # Store feature names
         self.feature_names = X.columns.tolist()
@@ -227,7 +227,7 @@ class MispricingDetector:
         else:
             auc = np.nan
         
-        print(f"✓ Train Accuracy: {train_acc:.3f} | Test Accuracy: {test_acc:.3f}")
+        print(f" Train Accuracy: {train_acc:.3f} | Test Accuracy: {test_acc:.3f}")
         print(f"  Precision: {precision:.3f} | Recall: {recall:.3f} | AUC: {auc:.3f}")
         
         # Feature importance
@@ -236,7 +236,7 @@ class MispricingDetector:
             'importance': self.model.feature_importances_
         }).sort_values('importance', ascending=False)
         
-        print(f"\n📊 Top 5 Features:")
+        print(f"\nTop 5 Features:")
         for idx, row in feature_importance.head(5).iterrows():
             print(f"   {row['feature']}: {row['importance']:.3f}")
         
@@ -293,11 +293,11 @@ class MispricingDetector:
         
         # Interpretation
         if mispricing_score > 70:
-            assessment = "🟢 STRONG MISPRICING SIGNAL - High conviction trade"
+            assessment = "STRONG MISPRICING SIGNAL - High conviction trade"
         elif mispricing_score > 50:
-            assessment = "🟡 MODERATE MISPRICING - Worth investigating"
+            assessment = "MODERATE MISPRICING - Worth investigating"
         else:
-            assessment = "⚪ FAIRLY PRICED - No strong signal"
+            assessment = "FAIRLY PRICED - No strong signal"
         
         return {
             'mispricing_score': mispricing_score,
@@ -325,14 +325,14 @@ class MispricingDetector:
         result = self.predict_mispricing(features)
         
         explanation = f"\n{'='*70}\n"
-        explanation += f"🎯 MISPRICING ANALYSIS\n"
+        explanation += f"MISPRICING ANALYSIS\n"
         explanation += f"{'='*70}\n\n"
         explanation += f"Mispricing Score: {result['mispricing_score']:.1f}/100\n"
         explanation += f"Assessment: {result['assessment']}\n\n"
-        explanation += f"📊 Top Drivers (SHAP Analysis):\n"
+        explanation += f"Top Drivers (SHAP Analysis):\n"
         
         for idx, row in result['top_drivers'].iterrows():
-            direction = "↑" if row['shap_value'] > 0 else "↓"
+            direction = "UP" if row['shap_value'] > 0 else "DOWN"
             contribution_pct = abs(row['shap_value']) / result['top_drivers']['shap_value'].abs().sum() * 100
             explanation += f"   {direction} {row['feature']}: {row['feature_value']:.4f} "
             explanation += f"(contributes {contribution_pct:.1f}% to score)\n"
