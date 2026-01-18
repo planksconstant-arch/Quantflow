@@ -12,6 +12,13 @@ from datetime import datetime, timedelta
 
 # Import QuantFlow modules
 import sys
+import os
+
+# Enforce UTF-8 encoding for Windows consoles
+if sys.platform.startswith('win'):
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+
 sys.path.append('.')
 
 from main import QuantFlow
@@ -191,11 +198,8 @@ def main():
     expiry_date = (datetime.now() + timedelta(days=days_out)).strftime("%Y-%m-%d")
     
     # Analysis button
-    col_run, col_refresh = st.sidebar.columns([3, 1])
-    with col_run:
-        run_analysis = st.button("🚀 Run Analysis", type="primary", use_container_width=True)
-    with col_refresh:
-        force_refresh = st.checkbox("Fresh", help="Force fresh data (bypass cache)")
+    run_analysis = st.button("🚀 Run Analysis", type="primary", use_container_width=True)
+    force_refresh = st.checkbox("Force Refresh Data", value=False)
     
     # Main content area
     if run_analysis or st.session_state.analysis_run:
@@ -211,6 +215,8 @@ def main():
                 qf.fetch_data(force_refresh=force_refresh)
                 pricing = qf.get_ensemble_pricing()
                 greeks = qf.get_greeks()
+
+                
                 ml_results = qf.run_ml_analysis()
                 scenario_results = qf.run_scenario_analysis()
                 
@@ -241,7 +247,7 @@ def main():
             display_summary(qf, pricing, greeks, ml_results)
         
         with tab2:
-            display_pricing(pricing)
+            display_pricing(pricing, ml_results)
         
         with tab3:
             display_greeks(qf, greeks)
@@ -332,6 +338,36 @@ def display_summary(qf, pricing, greeks, ml_results):
     # Key metrics in columns with tooltips
     col1, col2, col3, col4 = st.columns(4)
     
+    # Contract Header
+    st.markdown(f"""
+    <div style="padding: 1rem; background: rgba(255, 255, 255, 0.05); border-radius: 10px; margin-bottom: 2rem; border: 1px solid rgba(255,255,255,0.1);">
+        <h3 style="margin:0; font-size: 1.2rem; color: #aaa;">Contract Details</h3>
+        <div style="display: flex; gap: 2rem; align-items: center; margin-top: 0.5rem;">
+            <div>
+                <span style="font-size: 0.9rem; color: #888;">Ticker</span>
+                <div style="font-size: 1.5rem; font-weight: bold; color: white;">{qf.ticker}</div>
+            </div>
+            <div>
+                 <span style="font-size: 0.9rem; color: #888;">Type</span>
+                 <div style="font-size: 1.5rem; font-weight: bold; color: {'#00FF88' if qf.option_type=='call' else '#FF5555'}; text-transform: uppercase;">
+                    {qf.option_type}
+                 </div>
+            </div>
+             <div>
+                <span style="font-size: 0.9rem; color: #888;">Strike</span>
+                <div style="font-size: 1.5rem; font-weight: bold; color: white;">${qf.K:.2f}</div>
+            </div>
+             <div>
+                <span style="font-size: 0.9rem; color: #888;">Expiry</span>
+                <div style="font-size: 1.5rem; font-weight: bold; color: white;">{qf.expiry}</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Key metrics in columns
+    col1, col2, col3, col4 = st.columns(4)
+    
     with col1:
         st.metric(
             "Underlying Stock Price",
@@ -341,19 +377,38 @@ def display_summary(qf, pricing, greeks, ml_results):
         )
     
     with col2:
+        bid = qf.market_data['option'].get('bid', 0)
+        ask = qf.market_data['option'].get('ask', 0)
+        
+        # Use Mid Price if available, otherwise Last
+        if bid > 0 and ask > 0:
+            current_price = (bid + ask) / 2
+            price_label = "Mark Price (Mid)"
+        else:
+            current_price = pricing['market_price']
+            price_label = "Last Price"
+            
+        spread_text = f"Bid: {format_currency(bid)} | Ask: {format_currency(ask)}"
+        
         st.metric(
-            "Option Premium ($)",
-            format_currency(pricing['market_price']),
+            price_label,
+            format_currency(current_price),
             delta=None,
-            help="Current market price for this option contract (the premium)"
+            help=f"Mid-point of Bid/Ask Spread. {spread_text}"
         )
+        st.caption(spread_text)
     
     with col3:
+        # Use Forecast Fair Value if available, else Ensemble
+        fair_value = ml_results.get('forecast_fair_value', pricing['ensemble_fair_value'])
+        divergence = ml_results.get('divergence_pct', pricing['divergence_pct'])
+        
         st.metric(
-            "Fair Value (Ensemble)",
-            format_currency(pricing['ensemble_fair_value']),
-            delta=f"{pricing['divergence_pct']:+.1f}%",
-            help=TOOLTIPS["ensemble"]
+             "Forecast Fair Value",
+             format_currency(fair_value),
+             delta=f"{divergence:+.1f}%",
+             delta_color="normal", # Green if positive (Undervalued), Red if negative (Overvalued)
+             help="Fair Value based on AI-Forecasted Volatility, not just current Market IV."
         )
     
     with col4:
@@ -364,16 +419,22 @@ def display_summary(qf, pricing, greeks, ml_results):
             help=TOOLTIPS["regime"]
         )
     
-    with col3:
-        st.metric(
+    # Mispricing Score Row
+    score_col1, score_col2 = st.columns([1, 1])
+    with score_col1:
+         st.metric(
             "Mispricing Score",
             f"{ml_results['mispricing_score']:.0f}/100",
             delta=ml_results['mispricing_assessment'],
-            help=TOOLTIPS["mispricing"]
+            help="Based on divergence between Market Price and AI-Forecasted Fair Value."
         )
     
     # Smart Position Sizer
     st.subheader("🎯 Smart Position Sizer")
+
+    # Volatility Reality Check
+    if "Low Vol" in ml_results['regime']['regime_label'] and qf.sigma > 0.4:
+        st.warning(f"⚠️ **Anomaly Detected**: AI detects 'Low Volatility' regime, but Option Implied Volatility is high ({qf.sigma:.1%}). Market might be pricing in an event not yet in historical features.")
     
 
     col1, col2 = st.columns(2)
@@ -471,13 +532,18 @@ def display_summary(qf, pricing, greeks, ml_results):
         """)
 
 
-def display_pricing(pricing):
+def display_pricing(pricing, ml_results=None):
     """Display pricing analysis"""
     # Visual Header
     if os.path.exists(os.path.join("assets", "pricing.png")):
         st.image(os.path.join("assets", "pricing.png"), use_container_width=True)
         
     st.header("💰 Ensemble Pricing Analysis")
+    
+    # Use Forecast Fair Value if available (Synced with Summary)
+    ensemble_price = pricing['ensemble_fair_value']
+    if ml_results and 'forecast_fair_value' in ml_results:
+        ensemble_price = ml_results['forecast_fair_value']
     
     # Model comparison
     st.subheader("Model Comparison")
@@ -488,7 +554,7 @@ def display_pricing(pricing):
             pricing['black_scholes'],
             pricing['binomial_european'],
             pricing['monte_carlo'],
-            pricing['ensemble_fair_value']
+            ensemble_price
         ]
     }
     
@@ -1007,6 +1073,7 @@ def display_risk_analysis(scenario_results):
     st.subheader("🎲 Monte Carlo Risk Metrics (10,000 Simulations)")
     mc_dist = scenario_results['monte_carlo_distribution']
     
+
     col1, col2, col3 = st.columns(3)
     
     with col1:

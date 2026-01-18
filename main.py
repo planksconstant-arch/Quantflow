@@ -217,39 +217,76 @@ class QuantFlow:
         results['adjusted_greeks'] = adjusted_greeks
         
         # === MISPRICING DETECTION ===
-        # Note: Would need historical training data - demo version
         print(f"\n{'='*70}")
-        print(f"MISPRICING DETECTION")
+        print(f"MISPRICING DETECTION (RECALIBRATED)")
         print(f"{'='*70}\n")
         
-        # Calculate mispricing features
-        pricing = self.get_ensemble_pricing()
-        option_data = self.market_data['option']
+        # 1. Theoretical Value (Market IV) -> "Pricing Error" (Model vs Market)
+        # 2. Forecast Value (Forecast IV) -> "True Value" (What it SHOULD be worth)
         
-        print(f"Pricing Error: {pricing['divergence_pct']:+.2f}%")
-        print(f"IV vs Forecast Vol: {self.sigma*100:.2f}% vs {vol_forecasts['ensemble']*100:.2f}%")
+        forecast_vol = vol_forecasts['ensemble']
+        current_iv = self.sigma
         
-        vol_spread = (self.sigma - vol_forecasts['ensemble']) / vol_forecasts['ensemble'] * 100
-        print(f"Volatility Spread: {vol_spread:+.2f}%")
+        # Calculate Fair Value using Forecast Volatility
+        pricing_engine = BlackScholesModel(self.S, self.K, self.T, self.r, forecast_vol, self.q)
+        forecast_fair_value = pricing_engine.price(self.option_type)
         
-        # Simple mispricing score (without full ML training)
-        # Score based on pricing error + vol spread
-        pricing_score = abs(pricing['divergence_pct']) * 5  # Weight pricing
-        vol_score = abs(vol_spread) * 3  # Weight vol spread
-        mispricing_score = min(pricing_score + vol_score, 100)
+        # Enforce Arbitrage Lower Bound
+        # Use simple rate floor of 4.5% to ensure physical realism
+        effective_r = max(self.r, 0.045)
         
-        if mispricing_score > 70:
-            mispricing_assessment = "STRONG MISPRICING SIGNAL"
-        elif mispricing_score > 40:
-            mispricing_assessment = "MODERATE MISPRICING"
+        # Call Lower Bound: S - K * exp(-rT)
+        # Put Lower Bound: K * exp(-rT) - S
+        if self.option_type == 'call':
+             lower_bound = max(0, self.S - self.K * np.exp(-effective_r * self.T))
         else:
-            mispricing_assessment = "FAIRLY PRICED"
+             lower_bound = max(0, self.K * np.exp(-effective_r * self.T) - self.S)
+        
+        # Add buffer to ensure strictly above floor (Cost of Carry enforcement)
+        floor_price = lower_bound + 0.10
+             
+        if forecast_fair_value < floor_price:
+             print(f"! Clamping Fair Value to No-Arbitrage Floor: {format_currency(floor_price)} (was {format_currency(forecast_fair_value)})")
+             forecast_fair_value = floor_price
+        
+        # Get market pricing
+        pricing = self.get_ensemble_pricing()
+        market_price = pricing['market_price']
+        
+        # Calculate 'True' Divergence
+        # If Market Price < Forecast Fair Value => Undervalued
+        divergence_dollars = forecast_fair_value - market_price
+        divergence_pct = (divergence_dollars / market_price) * 100 if market_price > 0 else 0
+        
+        print(f"Market Price: {format_currency(market_price)} (IV={current_iv:.2%})")
+        print(f"Forecast Fair Value: {format_currency(forecast_fair_value)} (Forecast Vol={forecast_vol:.2%})")
+        print(f"Divergence: {divergence_pct:+.2f}% ({format_currency(divergence_dollars)})")
+
+        # Score Calibration
+        # A 100/100 score should require meaningful divergence (e.g., > 20% or > $5)
+        # Score = min(100, abs(divergence_pct) * 2.5)  -> 40% divergence = 100 score
+        
+        base_score = min(100, abs(divergence_pct) * 2.5)
+        
+        # Bonus for edge cases
+        if abs(divergence_pct) < 5:
+             # Very small divergence is basically noise/spread
+             mispricing_score = max(5, base_score) # Low score
+             mispricing_assessment = "FAIRLY PRICED"
+        elif divergence_pct > 0:
+             mispricing_score = base_score
+             mispricing_assessment = "UNDERVALUED (Buy Signal)" if mispricing_score > 50 else "Slightly Undervalued"
+        else:
+             mispricing_score = base_score
+             mispricing_assessment = "OVERVALUED (Sell Signal)" if mispricing_score > 50 else "Slightly Overvalued"
         
         print(f"\nMispricing Score: {mispricing_score:.1f}/100")
         print(f"Assessment: {mispricing_assessment}")
         
         results['mispricing_score'] = mispricing_score
         results['mispricing_assessment'] = mispricing_assessment
+        results['forecast_fair_value'] = forecast_fair_value
+        results['divergence_pct'] = divergence_pct
         
         return results
     
@@ -279,9 +316,15 @@ class QuantFlow:
         print(f"Cost: {format_currency(sizing['total_cost'])} ({sizing['pct_portfolio']:.1f}% of Portfolio)")
         print(f"Max Risk: {format_currency(sizing['total_risk'])}")
         
+        # Ensure analysis runs on at least 1 contract even if recommendation is 0
+        sim_qty = sizing['recommended_contracts']
+        if sim_qty == 0:
+            sim_qty = 1
+            print("! Note: Recommended position is 0. Simulating 1 contract for risk analysis.")
+        
         analyzer = ScenarioAnalyzer(
             self.S, self.K, self.T, self.r, self.sigma,
-            self.option_type, self.q, position_size=sizing['recommended_contracts']
+            self.option_type, self.q, position_size=sim_qty
         )
         
         # Standard scenarios

@@ -7,6 +7,7 @@ from typing import Dict, Tuple, Optional
 import joblib
 import os
 import random
+from scipy import stats
 
 from utils.config import config
 from utils.helpers import log_returns, annualized_volatility
@@ -105,7 +106,7 @@ class MarketDataFetcher:
             data = []
             for k in strikes:
                 # Black-Scholes approx for mock price
-                vol = 0.45
+                vol = 0.60
                 t = 90/365
                 d1 = (np.log(spot/k) + (0.045 + 0.5*vol**2)*t) / (vol*np.sqrt(t))
                 d2 = d1 - vol*np.sqrt(t)
@@ -113,9 +114,13 @@ class MarketDataFetcher:
                 call_price = spot*stats.norm.cdf(d1) - k*np.exp(-0.045*t)*stats.norm.cdf(d2)
                 put_price = k*np.exp(-0.045*t)*stats.norm.cdf(-d2) - spot*stats.norm.cdf(-d1)
                 
+                price = call_price if config.OPTION_TYPE == 'call' else put_price
+                
                 data.append({
                     'strike': k,
-                    'lastPrice': call_price if config.OPTION_TYPE == 'call' else put_price,
+                    'lastPrice': price,
+                    'bid': price * 0.98,
+                    'ask': price * 1.02,
                     'impliedVolatility': vol,
                     'volume': 100
                 })
@@ -187,7 +192,7 @@ class MarketDataFetcher:
                 
             # Ensure IV is not zero
             if option.get('impliedVolatility', 0) < 0.01:
-                option['impliedVolatility'] = 0.45  # Default to 45%
+                option['impliedVolatility'] = 0.60  # Default to 60%
                 
             return option
             
@@ -196,7 +201,9 @@ class MarketDataFetcher:
             return pd.Series({
                 'strike': strike,
                 'lastPrice': 15.50,  # Mock price
-                'impliedVolatility': 0.45,
+                'bid': 15.20,
+                'ask': 15.80,
+                'impliedVolatility': 0.60,
                 'volume': 1000,
                 'model_is_valid': True # Mock data is technically 'valid' for demo
             })
@@ -218,9 +225,13 @@ class MarketDataFetcher:
             tbill = yf.Ticker("^IRX")
             hist = tbill.history(period="5d")
             if not hist.empty:
-                return hist['Close'].iloc[-1] / 100.0
-        except:
-            pass
+                rate = hist['Close'].iloc[-1] / 100.0
+                if rate > 0.01: # Sanity check: Rate must be > 1%
+                     return rate
+                print("! Fetched Risk Free Rate too low, using default.")
+        except Exception as e:
+            print(f"! Error fetching rates: {e}")
+            
         return 0.045  # 4.5% default
 
     def get_dividend_yield(self) -> float:

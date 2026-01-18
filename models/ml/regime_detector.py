@@ -207,13 +207,23 @@ class RegimeDetector:
         # CAP CONFIDENCE to avoid "100% AI Certainty" illusion
         confidence = state_probs[current_state]
         
-        if is_synthetic or confidence > 0.99:
-            # If data is suspect or model is too confident, dampen it
-            confidence = min(confidence, 0.99)
+        if is_synthetic or confidence > 0.95:
+            # If data is suspect or model is too confident, dampen it to avoid "Overfitting" look
+            confidence = min(confidence, 0.95)
             # If completely flat data, force lower confidence
             if is_synthetic:
                 confidence = 0.65
-                # Ideally might want to say "Neutral", but we simulate a regime
+
+        # Sanity Check: Low Vol Regime but High IV?
+        if "Low Vol" in regime_label:
+            # Check IV if available (passed in features? No, usually in main. We can infer from realize vol)
+            # We used realized_vol in features
+            last_vol = features['realized_vol'].iloc[-1]
+            if last_vol > 0.40:
+                # Contradiction: AI says Low Vol, but Realized Vol > 40%
+                # Degrade confidence significantly
+                confidence = min(confidence, 0.60)
+                # Maybe even force a switch or just warn? For now, just lower confidence.
                 
         return {
             'current_state': current_state,
