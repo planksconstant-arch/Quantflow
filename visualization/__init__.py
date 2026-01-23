@@ -1,5 +1,6 @@
 """Visualization package"""
 from .greeks_plots import GreeksVisualizer
+from .executive_dashboard import ExecutiveDashboard
 from .chart_config import (
     PROFESSIONAL_LAYOUT,
     CHART_CONFIG,
@@ -13,6 +14,7 @@ from .chart_config import (
 
 __all__ = [
     'GreeksVisualizer',
+    'ExecutiveDashboard',
     'PROFESSIONAL_LAYOUT',
     'CHART_CONFIG',
     'COLORS',
