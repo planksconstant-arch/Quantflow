@@ -75,7 +75,7 @@ graph TB
 
 ### 📊 Executive Summary & Position Sizer
 Real-time pricing, mispricing detection, and AI-powered market regime analysis.
-![Dashboard Summary](docs/images/dashboard_summary.png)
+
 
 ### 📐 Interactive Greeks Analysis
 Visualizing option sensitivity (Delta/Gamma) across stock price ranges.
