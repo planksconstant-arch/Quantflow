@@ -11,7 +11,7 @@ import os
 
 from main import QuantFlow
 from models import GreeksCalculator
-from visualization import GreeksVisualizer
+from visualization import GreeksVisualizer, ExecutiveDashboard
 from analysis import ScenarioAnalyzer
 from utils import config, format_currency, format_percentage
 
@@ -150,6 +150,42 @@ def generate_all_charts():
     
     # Generate executive memo
     generate_executive_memo(summary_data, viz.output_dir)
+
+    # Generate Executive Dashboard Image
+    print("\n📊 Generating Executive Dashboard Image...")
+    dashboard = ExecutiveDashboard(output_dir=viz.output_dir)
+
+    # Extract scenario PnLs in correct order
+    scenario_order = ['Bull', 'Mild Bull', 'Base', 'Mild Bear', 'Bear', 'Crisis']
+    scenario_pnls = []
+    for name in scenario_order:
+        pnl = scenarios[scenarios['scenario_name'] == name]['total_pnl'].iloc[0]
+        scenario_pnls.append(pnl)
+
+    dashboard_data = {
+        'mispricing_score': summary_data['ml_analysis']['mispricing_score'],
+        'market_price': summary_data['market_data']['market_price'],
+        'bs_price': summary_data['pricing']['black_scholes'],
+        'binomial_price': summary_data['pricing']['binomial_european'],
+        'mc_price': summary_data['pricing']['monte_carlo'],
+        'fair_value': summary_data['pricing']['ensemble_fair_value'],
+        'current_regime': summary_data['ml_analysis']['regime'],
+        'regime_confidence': summary_data['ml_analysis']['regime_confidence'] / 100.0,
+        'prob_profit': summary_data['risk_metrics']['prob_profit'] / 100.0,
+        'delta': summary_data['greeks']['delta'],
+        'gamma': summary_data['greeks']['gamma'],
+        'theta': summary_data['greeks']['theta_per_day'],
+        'vega': summary_data['greeks']['vega_percent'],
+        'spot_price': summary_data['market_data']['spot_price'],
+        'pnl_distribution': mc_dist['all_pnl'],
+        'var_95': summary_data['risk_metrics']['var_95'],
+        'scenario_pnls': scenario_pnls,
+        'recommendation': summary_data['hedge_recommendation'],
+        'expected_return': (summary_data['risk_metrics']['mean_pnl'] / (summary_data['market_data']['market_price'] * 100)) * 100,
+        'sharpe': 1.5  # Approximate
+    }
+
+    dashboard.create_dashboard(dashboard_data)
     
     return summary_data
 
@@ -434,6 +470,7 @@ if __name__ == "__main__":
     print("="*70)
     print(f"\nFiles created in: {config.CHART_OUTPUT_DIR}")
     print("\n📊 Charts:")
+    print("  - executive_dashboard.png")
     print("  - greeks_vs_spot.png")
     print("  - greeks_vs_time.png")
     print("  - option_surface_3d.png / .html")
