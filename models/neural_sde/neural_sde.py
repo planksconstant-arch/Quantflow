@@ -107,7 +107,7 @@ class NeuralSDE(nn.Module):
         >>> paths = sde(x0, ts)  # Generate price paths
     """
     
-    noise_type = "diagonal"  # Diagonal noise (uncorrelated Brownian motions)
+    noise_type = "general"  # General noise (allows state_size != noise_size)
     sde_type = "ito"  # Ito interpretation
     
     def __init__(self, state_size=1, noise_size=1, hidden_size=64, num_layers=3):
