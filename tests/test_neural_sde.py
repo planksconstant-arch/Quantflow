@@ -71,7 +71,10 @@ class TestUtils:
         # Brownian motion properties
         assert W[:, 0, :].abs().max() < 1e-6  # Starts at zero
         assert W.mean().abs() < 0.1  # Mean ~0
-        assert 0.8 < W.std() < 1.2  # Std ~sqrt(T)
+
+        # Std at T=1 should be ~1
+        # W.std() is across all t, which is lower (~0.7)
+        assert 0.8 < W[:, -1, :].std() < 1.2  # Terminal Std ~sqrt(T)
     
     def test_gbm_paths(self):
         """Test GBM path generation"""
@@ -109,7 +112,7 @@ class TestTrainer:
         trainer = NeuralSDETrainer(sde, historical, device='cpu')
         
         # Train for few epochs
-        trainer.train(epochs=5, batch_size=16, verbose=False)
+        trainer.train(epochs=5, batch_size=16, n_critic=1, verbose=False)
         
         assert len(trainer.history['d_loss']) == 5
         assert len(trainer.history['g_loss']) == 5
@@ -123,7 +126,7 @@ class TestTrainer:
         
         sde = NeuralSDE(state_size=1, noise_size=1, hidden_size=16, num_layers=2)
         trainer = NeuralSDETrainer(sde, historical, device='cpu')
-        trainer.train(epochs=2, batch_size=16, verbose=False)
+        trainer.train(epochs=2, batch_size=16, n_critic=1, verbose=False)
         
         # Generate paths
         generated = trainer.generate_paths(num_paths=10, S0=100)

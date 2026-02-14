@@ -1,4 +1,20 @@
-# Add this section at the end of app.py before if __name__ == "__main__":
+import streamlit as st
+from utils import format_currency
+
+# Onboarding tooltips dictionary
+TOOLTIPS = {
+    "ensemble": "📊 **Ensemble Pricing**: A weighted average of Black-Scholes, Binomial, and Monte Carlo models to reduce individual model errors and find the 'Mathematical Truth'.",
+    "delta": "📈 **Delta**: Your 'Stock Equivalent'—how much the option gains for every $1 move in the stock. Delta of 0.62 = option moves $0.62 per $1 stock move.",
+    "gamma": "⚡ **Gamma**: The 'Accelerator'—how fast your Delta changes as the stock price moves. High Gamma = rapidly changing risk exposure.",
+    "theta": "⏰ **Theta**: Time decay in dollars per day. This is money you lose every day just from the passage of time.",
+    "vega": "🌊 **Vega**: Volatility sensitivity. How much you gain/lose for every 1% change in implied volatility.",
+    "var": "⚠️ **VaR (Value at Risk)**: The dollar amount your position could lose with 95% or 99% statistical certainty in normal markets.",
+    "cvar": "🔴 **CVaR (Expected Shortfall)**: The average loss in the absolute worst 5% of market outcomes. Your 'tail risk'.",
+    "regime": "🎯 **Market Regime**: Our AI identifies the current market environment (Low/High Vol × Bull/Bear) so Greeks can be adjusted for the conditions you actually face.",
+    "mispricing": "🔍 **Mispricing Score**: 0-100 scale measuring statistical edge. 80+ means the math is heavily in your favor. Based on XGBoost + SHAP analysis.",
+    "vanna": "📊 **Vanna**: How Delta changes as Volatility changes. Important for understanding vol crush scenarios.",
+    "charm": "⏱️ **Charm**: How Delta decays as time passes (Delta-bleed). Critical for longer-dated positions."
+}
 
 def display_scenario_builder(qf, pricing):
     """Interactive what-if scenario simulator"""

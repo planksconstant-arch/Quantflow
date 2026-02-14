@@ -189,7 +189,7 @@ class ExecutiveDashboard:
         prob = data.get('prob_profit', 0.58) * 100
         
         # Create donut chart
-        wedges, texts, autotexts = ax.pie(
+        wedges, texts = ax.pie(
             [prob, 100-prob],
             colors=['#22c55e', '#e5e7eb'],
             startangle=90,
