@@ -88,7 +88,7 @@ class GreeksCalculator:
         analytical = self.get_analytical_greeks()
         
         greeks_data = {
-            'Greek': ['Delta', 'Gamma', 'Theta (annual)', 'Theta (per day)', 'Vega', 'Vega (%)', 'Rho', 'Rho (%)'],
+            'Greek': ['Delta', 'Gamma', 'Theta (annual)', 'Theta (per day)', 'Vega', 'Vega (%)', 'Rho', 'Rho (%)', 'Vanna', 'Vomma', 'Charm'],
             'Value': [
                 analytical['delta'],
                 analytical['gamma'],
@@ -98,6 +98,9 @@ class GreeksCalculator:
                 analytical['vega_percent'],
                 analytical['rho'],
                 analytical['rho_percent'],
+                analytical['vanna'],
+                analytical['vomma'],
+                analytical['charm'],
             ],
             'Interpretation': [
                 f"Position moves ${analytical['delta']:.3f} per $1 stock move",
@@ -108,6 +111,9 @@ class GreeksCalculator:
                 f"Option gains ${analytical['vega_percent']:.4f} per 1% vol increase",
                 f"Option gains ${analytical['rho']:.2f} per 100% rate increase",
                 f"Option gains ${analytical['rho_percent']:.4f} per 1% rate increase",
+                f"Delta shifts by {analytical['vanna']:.4f} per 100% vol move",
+                f"Vega convexity: {analytical['vomma']:.4f}",
+                f"Delta time-decay: {analytical['charm']:.4f} per year",
             ]
         }
         

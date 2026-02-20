@@ -7,7 +7,7 @@ import numpy as np
 from typing import Dict, Tuple
 from scipy.stats import norm
 
-from utils.helpers import time_to_maturity, validate_positive
+from utils.helpers import validate_positive
 
 
 class BlackScholesModel:
@@ -17,6 +17,8 @@ class BlackScholesModel:
     Supports European-style options with dividends
     """
     
+    MIN_TIME = 1e-10
+
     def __init__(self, S: float, K: float, T: float, r: float, sigma: float, q: float = 0.0):
         """
         Initialize BS model
@@ -38,11 +40,15 @@ class BlackScholesModel:
         """
         self.S = validate_positive(S, "Spot price")
         self.K = validate_positive(K, "Strike price")
-        self.T = max(T, 0.0001)  # Avoid division by zero
+        self.T = max(float(T), self.MIN_TIME)  # Avoid division by zero
         self.r = r
         self.sigma = validate_positive(sigma, "Volatility")
         self.q = q
         
+        self.sqrt_T = np.sqrt(self.T)
+        self.discount_r = np.exp(-self.r * self.T)
+        self.discount_q = np.exp(-self.q * self.T)
+
         # Calculate d1 and d2
         self.d1 = self._calculate_d1()
         self.d2 = self._calculate_d2()
@@ -50,12 +56,33 @@ class BlackScholesModel:
     def _calculate_d1(self) -> float:
         """Calculate d1 parameter"""
         numerator = np.log(self.S / self.K) + (self.r - self.q + 0.5 * self.sigma**2) * self.T
-        denominator = self.sigma * np.sqrt(self.T)
+        denominator = self.sigma * self.sqrt_T
         return numerator / denominator
     
     def _calculate_d2(self) -> float:
         """Calculate d2 parameter"""
-        return self.d1 - self.sigma * np.sqrt(self.T)
+        return self.d1 - self.sigma * self.sqrt_T
+
+    def _ensure_option_type(self, option_type: str) -> str:
+        option_type_normalized = option_type.lower()
+        if option_type_normalized not in {"call", "put"}:
+            raise ValueError(f"option_type must be 'call' or 'put', got {option_type}")
+        return option_type_normalized
+
+    def no_arbitrage_bounds(self, option_type: str) -> Tuple[float, float]:
+        """Return theoretical lower/upper bounds for European options."""
+        option_type = self._ensure_option_type(option_type)
+        spot_pv = self.S * self.discount_q
+        strike_pv = self.K * self.discount_r
+
+        if option_type == "call":
+            lower = max(spot_pv - strike_pv, 0.0)
+            upper = spot_pv
+        else:
+            lower = max(strike_pv - spot_pv, 0.0)
+            upper = strike_pv
+
+        return lower, upper
     
     def call_price(self) -> float:
         """
@@ -65,8 +92,8 @@ class BlackScholesModel:
         --------
         float : Call option value
         """
-        S_pv = self.S * np.exp(-self.q * self.T)
-        K_pv = self.K * np.exp(-self.r * self.T)
+        S_pv = self.S * self.discount_q
+        K_pv = self.K * self.discount_r
         
         price = S_pv * norm.cdf(self.d1) - K_pv * norm.cdf(self.d2)
         return max(price, 0.0)
@@ -79,20 +106,18 @@ class BlackScholesModel:
         --------
         float : Put option value
         """
-        S_pv = self.S * np.exp(-self.q * self.T)
-        K_pv = self.K * np.exp(-self.r * self.T)
+        S_pv = self.S * self.discount_q
+        K_pv = self.K * self.discount_r
         
         price = K_pv * norm.cdf(-self.d2) - S_pv * norm.cdf(-self.d1)
         return max(price, 0.0)
     
     def price(self, option_type: str) -> float:
         """Generic price call for either option type"""
-        if option_type.lower() == 'call':
+        option_type = self._ensure_option_type(option_type)
+        if option_type == 'call':
             return self.call_price()
-        elif option_type.lower() == 'put':
-            return self.put_price()
-        else:
-            raise ValueError(f"option_type must be 'call' or 'put', got {option_type}")
+        return self.put_price()
     
     # ========== GREEKS ==========
     
@@ -107,10 +132,11 @@ class BlackScholesModel:
         --------
         float : Delta value
         """
-        if option_type.lower() == 'call':
-            return np.exp(-self.q * self.T) * norm.cdf(self.d1)
+        option_type = self._ensure_option_type(option_type)
+        if option_type == 'call':
+            return self.discount_q * norm.cdf(self.d1)
         else:  # put
-            return -np.exp(-self.q * self.T) * norm.cdf(-self.d1)
+            return -self.discount_q * norm.cdf(-self.d1)
     
     def gamma(self) -> float:
         """
@@ -123,8 +149,8 @@ class BlackScholesModel:
         --------
         float : Gamma value (same for calls and puts)
         """
-        numerator = norm.pdf(self.d1) * np.exp(-self.q * self.T)
-        denominator = self.S * self.sigma * np.sqrt(self.T)
+        numerator = norm.pdf(self.d1) * self.discount_q
+        denominator = self.S * self.sigma * self.sqrt_T
         return numerator / denominator
     
     def theta(self, option_type: str) -> float:
@@ -138,15 +164,16 @@ class BlackScholesModel:
         --------
         float : Theta value (annualized)
         """
-        term1 = -(self.S * norm.pdf(self.d1) * self.sigma * np.exp(-self.q * self.T)) / (2 * np.sqrt(self.T))
+        option_type = self._ensure_option_type(option_type)
+        term1 = -(self.S * norm.pdf(self.d1) * self.sigma * self.discount_q) / (2 * self.sqrt_T)
         
-        if option_type.lower() == 'call':
-            term2 = self.r * self.K * np.exp(-self.r * self.T) * norm.cdf(self.d2)
-            term3 = -self.q * self.S * np.exp(-self.q * self.T) * norm.cdf(self.d1)
+        if option_type == 'call':
+            term2 = self.r * self.K * self.discount_r * norm.cdf(self.d2)
+            term3 = -self.q * self.S * self.discount_q * norm.cdf(self.d1)
             theta = term1 - term2 + term3
         else:  # put
-            term2 = self.r * self.K * np.exp(-self.r * self.T) * norm.cdf(-self.d2)
-            term3 = self.q * self.S * np.exp(-self.q * self.T) * norm.cdf(-self.d1)
+            term2 = self.r * self.K * self.discount_r * norm.cdf(-self.d2)
+            term3 = self.q * self.S * self.discount_q * norm.cdf(-self.d1)
             theta = term1 + term2 - term3
         
         return theta
@@ -166,7 +193,7 @@ class BlackScholesModel:
         --------
         float : Vega value (per 100% vol change)
         """
-        vega = self.S * norm.pdf(self.d1) * np.sqrt(self.T) * np.exp(-self.q * self.T)
+        vega = self.S * norm.pdf(self.d1) * self.sqrt_T * self.discount_q
         return vega
     
     def vega_percent(self) -> float:
@@ -184,10 +211,11 @@ class BlackScholesModel:
         --------
         float : Rho value (per 100% rate change)
         """
-        if option_type.lower() == 'call':
-            rho = self.K * self.T * np.exp(-self.r * self.T) * norm.cdf(self.d2)
+        option_type = self._ensure_option_type(option_type)
+        if option_type == 'call':
+            rho = self.K * self.T * self.discount_r * norm.cdf(self.d2)
         else:  # put
-            rho = -self.K * self.T * np.exp(-self.r * self.T) * norm.cdf(-self.d2)
+            rho = -self.K * self.T * self.discount_r * norm.cdf(-self.d2)
         
         return rho
     
@@ -195,6 +223,45 @@ class BlackScholesModel:
         """Rho per 1% change in interest rate"""
         return self.rho(option_type) / 100.0
     
+    def vanna(self) -> float:
+        """Cross-sensitivity d²V/(dS dσ)."""
+        return -self.discount_q * norm.pdf(self.d1) * self.d2 / self.sigma
+
+    def vomma(self) -> float:
+        """Second-order volatility sensitivity d²V/dσ²."""
+        return self.vega() * self.d1 * self.d2 / self.sigma
+
+    def charm(self, option_type: str) -> float:
+        """Delta decay with respect to time dΔ/dt (calendar time)."""
+        option_type = self._ensure_option_type(option_type)
+        common = (
+            self.discount_q * norm.pdf(self.d1)
+            * (2 * (self.r - self.q) * self.T - self.d2 * self.sigma * self.sqrt_T)
+            / (2 * self.T * self.sigma * self.sqrt_T)
+        )
+        if option_type == "call":
+            return self.q * self.discount_q * norm.cdf(self.d1) - common
+        return -self.q * self.discount_q * norm.cdf(-self.d1) - common
+
+
+    def risk_neutral_density(self, strike: float) -> float:
+        """
+        Breeden-Litzenberger risk-neutral density at maturity for a given strike.
+
+        For Black-Scholes this is simply the lognormal density under the
+        risk-neutral measure, discounted by exp(-rT).
+        """
+        k = validate_positive(strike, "strike")
+        d2_k = (np.log(self.S / k) + (self.r - self.q - 0.5 * self.sigma**2) * self.T) / (self.sigma * self.sqrt_T)
+        return self.discount_r * norm.pdf(d2_k) / (k * self.sigma * self.sqrt_T)
+
+    def price_and_greeks(self, option_type: str) -> Dict[str, float]:
+        """Return a compact pricing + Greeks snapshot used in risk reports."""
+        option_type = self._ensure_option_type(option_type)
+        snapshot = {'price': self.price(option_type)}
+        snapshot.update(self.all_greeks(option_type))
+        return snapshot
+
     def all_greeks(self, option_type: str) -> Dict[str, float]:
         """
         Calculate all Greeks at once
@@ -212,6 +279,9 @@ class BlackScholesModel:
             'vega_percent': self.vega_percent(),
             'rho': self.rho(option_type),
             'rho_percent': self.rho_percent(option_type),
+            'vanna': self.vanna(),
+            'vomma': self.vomma(),
+            'charm': self.charm(option_type),
         }
     
     # ========== IMPLIED VOLATILITY ==========
@@ -240,6 +310,17 @@ class BlackScholesModel:
         --------
         float : Implied volatility
         """
+        probe_model = BlackScholesModel(S, K, T, r, sigma=max(0.2, 1e-3), q=q)
+        lower_bound, upper_bound = probe_model.no_arbitrage_bounds(option_type)
+        if not (lower_bound <= market_price <= upper_bound):
+            raise ValueError(
+                f"Market price {market_price:.6f} violates no-arbitrage bounds "
+                f"[{lower_bound:.6f}, {upper_bound:.6f}]"
+            )
+
+        if T <= 0:
+            raise ValueError("Time to maturity must be positive for implied volatility")
+
         # Initial guess using Brenner-Subrahmanyam approximation
         sigma = np.sqrt(2 * np.pi / T) * (market_price / S)
         sigma = max(sigma, 0.01)  # Ensure positive
@@ -305,3 +386,21 @@ if __name__ == "__main__":
     print("\nCall Greeks:")
     for greek, value in bs.all_greeks('call').items():
         print(f"  {greek}: {value:.4f}")
+
+
+def black_scholes(S: float, K: float, T: float, r: float, sigma: float,
+                  option_type: str, q: float = 0.0) -> float:
+    """Functional API wrapper kept for backwards compatibility."""
+    if T < 0:
+        raise ValueError(f"Time to maturity must be non-negative, got {T}")
+    normalized_type = option_type.lower()
+    if normalized_type not in {"call", "put"}:
+        raise ValueError(f"option_type must be 'call' or 'put', got {option_type}")
+
+    if T == 0:
+        if normalized_type == "call":
+            return max(S - K, 0.0)
+        return max(K - S, 0.0)
+
+    model = BlackScholesModel(S=S, K=K, T=T, r=r, sigma=max(sigma, 1e-12), q=q)
+    return model.price(normalized_type)
