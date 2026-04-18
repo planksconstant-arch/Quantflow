@@ -36,6 +36,31 @@ class RegimeDetector:
         ]
         self.scaler_mean = None
         self.scaler_std = None
+
+    @staticmethod
+    def _calibrated_confidence(state_probs: np.ndarray, state_idx: int, is_synthetic: bool,
+                               realized_vol: float, regime_label: str) -> float:
+        """
+        Calibrate confidence by probability concentration (entropy) and data quality.
+        """
+        probs = np.asarray(state_probs, dtype=float)
+        probs = np.clip(probs, 1e-12, 1.0)
+        probs = probs / probs.sum()
+
+        raw_conf = float(probs[state_idx])
+        entropy = -np.sum(probs * np.log(probs))
+        max_entropy = np.log(len(probs))
+        concentration = 1.0 - (entropy / max_entropy) if max_entropy > 0 else 0.0
+
+        calibrated = raw_conf * (0.5 + 0.5 * concentration)
+
+        if is_synthetic:
+            calibrated *= 0.6
+
+        if "Low Vol" in regime_label and realized_vol > 0.40:
+            calibrated *= 0.75
+
+        return float(np.clip(calibrated, 0.05, 0.95))
         
     def prepare_features(self, price_data: pd.DataFrame, vix_data: pd.DataFrame = None) -> pd.DataFrame:
         """
@@ -204,26 +229,14 @@ class RegimeDetector:
         except:
              transition_probs = np.array([0.25, 0.25, 0.25, 0.25])
 
-        # CAP CONFIDENCE to avoid "100% AI Certainty" illusion
-        confidence = state_probs[current_state]
-        
-        if is_synthetic or confidence > 0.95:
-            # If data is suspect or model is too confident, dampen it to avoid "Overfitting" look
-            confidence = min(confidence, 0.95)
-            # If completely flat data, force lower confidence
-            if is_synthetic:
-                confidence = 0.65
-
-        # Sanity Check: Low Vol Regime but High IV?
-        if "Low Vol" in regime_label:
-            # Check IV if available (passed in features? No, usually in main. We can infer from realize vol)
-            # We used realized_vol in features
-            last_vol = features['realized_vol'].iloc[-1]
-            if last_vol > 0.40:
-                # Contradiction: AI says Low Vol, but Realized Vol > 40%
-                # Degrade confidence significantly
-                confidence = min(confidence, 0.60)
-                # Maybe even force a switch or just warn? For now, just lower confidence.
+        last_vol = float(features['realized_vol'].iloc[-1])
+        confidence = self._calibrated_confidence(
+            state_probs=state_probs,
+            state_idx=current_state,
+            is_synthetic=is_synthetic,
+            realized_vol=last_vol,
+            regime_label=regime_label
+        )
                 
         return {
             'current_state': current_state,

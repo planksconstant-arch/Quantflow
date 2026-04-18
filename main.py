@@ -300,31 +300,24 @@ class QuantFlow:
         print(f"Forecast Fair Value: {format_currency(forecast_fair_value)} (Forecast Vol={forecast_vol:.2%})")
         print(f"Divergence: {divergence_pct:+.2f}% ({format_currency(divergence_dollars)})")
 
-        # Score Calibration
-        # A 100/100 score should require meaningful divergence (e.g., > 20% or > $5)
-        # Score = min(100, abs(divergence_pct) * 2.5)  -> 40% divergence = 100 score
-        
+        # Score calibration with uncertainty penalty from spread + MC interval
         bid = option_quote.get('bid', market_price)
         ask = option_quote.get('ask', market_price)
-        base_score = self._uncertainty_adjusted_score(
+        mispricing_score = self._uncertainty_adjusted_score(
             divergence_pct=divergence_pct,
             divergence_dollars=divergence_dollars,
             bid=bid,
             ask=ask,
             mc_ci=pricing.get('monte_carlo_ci')
         )
-        
-        # Bonus for edge cases
-        if abs(divergence_pct) < 5:
-             # Very small divergence is basically noise/spread
-             mispricing_score = max(5, base_score) # Low score
-             mispricing_assessment = "FAIRLY PRICED"
+
+        # Assessment thresholds anchored to score significance
+        if mispricing_score < 15:
+            mispricing_assessment = "FAIRLY PRICED / NOISE"
         elif divergence_pct > 0:
-             mispricing_score = base_score
-             mispricing_assessment = "UNDERVALUED (Buy Signal)" if mispricing_score > 50 else "Slightly Undervalued"
+            mispricing_assessment = "UNDERVALUED (Buy Signal)" if mispricing_score >= 50 else "Slightly Undervalued"
         else:
-             mispricing_score = base_score
-             mispricing_assessment = "OVERVALUED (Sell Signal)" if mispricing_score > 50 else "Slightly Overvalued"
+            mispricing_assessment = "OVERVALUED (Sell Signal)" if mispricing_score >= 50 else "Slightly Overvalued"
         
         print(f"\nMispricing Score: {mispricing_score:.1f}/100")
         print(f"Assessment: {mispricing_assessment}")
@@ -344,20 +337,30 @@ class QuantFlow:
         # Risk Management & Position Sizing
         sizer = PositionSizer(portfolio_value=100000) # Default $100k portfolio
         
-        # Calculate optimal stop loss (2 SD move)
-        suggested_stop = sizer.suggest_stop_loss(self.S, self.sigma, self.T * 365)
-        
+        # Calculate spot-based expected move (for risk-aware option stop estimate)
+        suggested_stop = sizer.suggest_stop_loss(self.S, self.sigma, self.T)
+
         # Get sizing recommendation
         # If we are BUYING, entry is the option price (Fair Value preferred if market is stale)
         pricing = self.get_ensemble_pricing()
         entry_price = pricing['market_price']
-        
-        sizing = sizer.calculate_position_size(entry_price, stop_loss_price=entry_price * 0.5) # Assuming 50% max loss on option
+
+        # Dynamic option stop estimate using Delta × underlying move (bounded by premium-based limits)
+        base_greeks = GreeksCalculator(
+            self.S, self.K, self.T, self.r, self.sigma, self.option_type, self.q
+        ).get_analytical_greeks()
+        delta = abs(base_greeks.get('delta', 0.5))
+        underlying_drop = max(0.0, self.S - suggested_stop)
+        estimated_option_drawdown = delta * underlying_drop
+        bounded_drawdown = min(entry_price * 0.90, max(entry_price * 0.25, estimated_option_drawdown))
+        option_stop = max(0.05, entry_price - bounded_drawdown)
+
+        sizing = sizer.calculate_position_size(entry_price, stop_loss_price=option_stop)
         
         print(f"\n{'='*70}")
         print(f"RISK MANAGEMENT & SIZING")
         print(f"{'='*70}\n")
-        print(f"Portfolio: $100,000  |  Max Risk: 2%  |  Stop Loss: 50% of Premium")
+        print(f"Portfolio: $100,000  |  Max Risk: 2%  |  Dynamic Stop: {format_currency(option_stop)}")
         print(f"Recommended Position: {sizing['recommended_contracts']} contracts")
         print(f"Cost: {format_currency(sizing['total_cost'])} ({sizing['pct_portfolio']:.1f}% of Portfolio)")
         print(f"Max Risk: {format_currency(sizing['total_risk'])}")
