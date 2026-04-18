@@ -51,6 +51,7 @@ It is designed as a practical research and prototyping workspace for:
 - Volatility forecasting workflows
 - Mispricing detection models
 - Regime classification/detection
+- Execution-aware signal quality scoring (edge probability, p-value proxy, cost-adjusted return, Kelly cap)
 - Neural SDE modeling and training components
 
 ### 4) Strategy & Risk Analysis
@@ -209,4 +210,3 @@ Planned and active areas include:
 ## License
 
 This project is released under the MIT License.
-

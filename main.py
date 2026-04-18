@@ -10,7 +10,7 @@ from typing import Dict
 from data import MarketDataFetcher
 from models import BlackScholesModel, BinomialTreeModel, MonteCarloSimulation, GreeksCalculator
 from models.ml import VolatilityForecaster, MispricingDetector, RegimeDetector
-from analysis import ScenarioAnalyzer
+from analysis import ScenarioAnalyzer, SignalQualityEngine, SignalInputs
 from models.risk.risk_manager import PositionSizer
 from utils import config, time_to_maturity, format_currency, format_percentage
 
@@ -291,6 +291,7 @@ class QuantFlow:
             results['mispricing_assessment'] = "UNAVAILABLE - MARKET DATA INVALID"
             results['forecast_fair_value'] = forecast_fair_value
             results['divergence_pct'] = np.nan
+            results['signal_quality'] = {"actionable": False, "quality_tier": "D", "reason": "invalid_market_quote"}
             return results
 
         divergence_dollars = forecast_fair_value - market_price
@@ -318,14 +319,34 @@ class QuantFlow:
             mispricing_assessment = "UNDERVALUED (Buy Signal)" if mispricing_score >= 50 else "Slightly Undervalued"
         else:
             mispricing_assessment = "OVERVALUED (Sell Signal)" if mispricing_score >= 50 else "Slightly Overvalued"
+
+        # Execution-aware signal diagnostics
+        signal_engine = SignalQualityEngine()
+        signal_quality = signal_engine.evaluate(
+            SignalInputs(
+                market_price=market_price,
+                forecast_fair_value=forecast_fair_value,
+                bid=bid,
+                ask=ask,
+                mc_ci=pricing.get('monte_carlo_ci'),
+                confidence=current_regime.get('confidence', 0.5),
+            )
+        )
         
         print(f"\nMispricing Score: {mispricing_score:.1f}/100")
         print(f"Assessment: {mispricing_assessment}")
+        print(
+            f"Signal Quality: Tier {signal_quality['quality_tier']} | "
+            f"P(edge): {signal_quality['prob_edge_real']:.1%} | "
+            f"Exp Return/Contract: {signal_quality['expected_return_pct']:+.2f}% | "
+            f"Kelly Cap: {signal_quality['kelly_fraction']:.2%}"
+        )
         
         results['mispricing_score'] = mispricing_score
         results['mispricing_assessment'] = mispricing_assessment
         results['forecast_fair_value'] = forecast_fair_value
         results['divergence_pct'] = divergence_pct
+        results['signal_quality'] = signal_quality
         
         return results
     
