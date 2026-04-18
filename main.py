@@ -10,7 +10,13 @@ from typing import Dict
 from data import MarketDataFetcher
 from models import BlackScholesModel, BinomialTreeModel, MonteCarloSimulation, GreeksCalculator
 from models.ml import VolatilityForecaster, MispricingDetector, RegimeDetector
-from analysis import ScenarioAnalyzer, SignalQualityEngine, SignalInputs
+from analysis import (
+    ScenarioAnalyzer,
+    SignalQualityEngine,
+    SignalInputs,
+    ResearchValidator,
+    ValidationConfig,
+)
 from models.risk.risk_manager import PositionSizer
 from utils import config, time_to_maturity, format_currency, format_percentage
 
@@ -407,6 +413,32 @@ class QuantFlow:
             'scenarios': scenarios,
             'monte_carlo_distribution': mc_dist
         }
+
+    def run_research_validation(self, historical_options: pd.DataFrame,
+                                config_override: Dict = None) -> Dict:
+        """
+        Run research-grade walk-forward validation on an options panel.
+
+        Expected columns:
+        date, market_price, fair_value, bid, ask, future_option_price
+        """
+        cfg = ValidationConfig(**(config_override or {}))
+        validator = ResearchValidator(cfg)
+        report = validator.walk_forward_backtest(historical_options)
+
+        print(f"\n{'='*70}")
+        print(f"RESEARCH VALIDATION REPORT")
+        print(f"{'='*70}\n")
+        print(f"Trades: {report['n_trades']}")
+        print(f"Hit Rate: {report['hit_rate']:.1%}")
+        print(f"Avg Return: {report['avg_return']:+.2%}")
+        print(f"Sharpe (Ann.): {report['annualized_sharpe']:.2f}")
+        print(f"HAC t-stat: {report['hac_t_stat']:.2f}")
+        ci_low, ci_high = report['bootstrap_ci_95']
+        print(f"Bootstrap CI(95%) for mean return: [{ci_low:+.2%}, {ci_high:+.2%}]")
+        print(f"Economic Significance: {report['economic_significance'].upper()}")
+
+        return report
     
     def run_phase2_demo(self):
         """Run complete Phase 2 demonstration"""

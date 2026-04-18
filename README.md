@@ -57,6 +57,7 @@ It is designed as a practical research and prototyping workspace for:
 ### 4) Strategy & Risk Analysis
 - Scenario and stress-test analysis
 - Backtesting and sensitivity tools
+- Research-grade walk-forward validation with HAC t-stats and bootstrap confidence intervals
 - Deep hedging environment and policy models
 - Transaction-cost-aware execution modeling
 
