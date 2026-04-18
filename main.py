@@ -10,7 +10,13 @@ from typing import Dict
 from data import MarketDataFetcher
 from models import BlackScholesModel, BinomialTreeModel, MonteCarloSimulation, GreeksCalculator
 from models.ml import VolatilityForecaster, MispricingDetector, RegimeDetector
-from analysis import ScenarioAnalyzer
+from analysis import (
+    ScenarioAnalyzer,
+    SignalQualityEngine,
+    SignalInputs,
+    ResearchValidator,
+    ValidationConfig,
+)
 from models.risk.risk_manager import PositionSizer
 from utils import config, time_to_maturity, format_currency, format_percentage
 
@@ -59,6 +65,32 @@ class QuantFlow:
         self.sigma = self.market_data['option']['impliedVolatility']
         
         return self.market_data
+
+    @staticmethod
+    def _is_market_price_valid(raw_market_price: float, is_model_valid: bool) -> bool:
+        """Centralized guardrail for whether a market quote can be trusted for signal generation."""
+        return bool(is_model_valid and raw_market_price is not None and raw_market_price > 0.01)
+
+    @staticmethod
+    def _uncertainty_adjusted_score(divergence_pct: float, divergence_dollars: float,
+                                    bid: float, ask: float, mc_ci: tuple) -> float:
+        """
+        Convert divergence into a mispricing score while down-weighting noisy signals.
+        """
+        base_score = min(100.0, abs(divergence_pct) * 2.5)
+
+        spread = max(0.0, (ask or 0.0) - (bid or 0.0))
+        spread_noise = spread / 2.0  # half-spread as execution uncertainty
+
+        mc_noise = 0.0
+        if mc_ci and len(mc_ci) == 2:
+            mc_noise = max(0.0, (mc_ci[1] - mc_ci[0]) / 4.0)  # ~1 sigma proxy from 95% CI
+
+        noise_floor = max(0.10, spread_noise, mc_noise)
+        z_like = abs(divergence_dollars) / noise_floor
+        confidence_weight = min(1.0, z_like / 3.0)  # full weight once signal is ~3x noise
+
+        return round(base_score * confidence_weight, 2)
     
     def get_ensemble_pricing(self) -> Dict:
         """Calculate prices from all three models"""
@@ -98,10 +130,10 @@ class QuantFlow:
         # Ensemble
         ensemble_price = (bs_price + binomial_european + mc_price) / 3
         
-        # Fallback if pricing fails or returns near-zero (when it shouldn't)
-        if ensemble_price < 0.01:
-             print("! Ensemble price near zero, using fallback calculation")
-             ensemble_price = max(bs_price, 0.01)
+        # Safety floor only for numerical failure; keep diagnostics visible
+        if not np.isfinite(ensemble_price) or ensemble_price < 0:
+            print("! Ensemble pricing invalid, falling back to Black-Scholes estimate.")
+            ensemble_price = max(bs_price, 0.01)
 
         print(f"\nEnsemble Fair Value:  {format_currency(ensemble_price)}")
         
@@ -109,32 +141,32 @@ class QuantFlow:
         raw_market_price = self.market_data['option']['lastPrice']
         is_model_valid = self.market_data['option'].get('model_is_valid', True)
         
-        market_price = raw_market_price
-        price_source = "Market Data"
-        
-        # Fallback Conditions:
-        # 1. Explicitly flagged as invalid by fetcher (Arbitrage detected)
-        # 2. Price is zero/negative
-        if not is_model_valid or raw_market_price <= 0.01:
-             print(f"! NOTICE: Market Data Stale/Invalid (Last: {raw_market_price}). Using FAIR VALUE.")
-             market_price = ensemble_price
-             price_source = "Fair Value (Est)"
-             
+        market_is_valid = self._is_market_price_valid(raw_market_price, is_model_valid)
+        market_price = raw_market_price if market_is_valid else ensemble_price
+        price_source = "Market Data" if market_is_valid else "Fallback (No Valid Quote)"
+
+        if not market_is_valid:
+            print(f"! NOTICE: Market quote invalid/stale (Last={raw_market_price}). Signal generation disabled.")
+
         print(f"Market Price:  {format_currency(market_price)} [{price_source}]")
-        
-        # Divergence
-        divergence = ((ensemble_price - market_price) / market_price) * 100
-        divergence_dollars = ensemble_price - market_price
-        
-        print(f"\nDivergence:  {format_currency(divergence_dollars)} ({divergence:+.2f}%)")
-        
-        if abs(divergence) < 2:
-            assessment = "FAIRLY PRICED"
-        elif divergence > 0:
-            assessment = "UNDERVALUED (Market < Fair Value)"
+
+        # Divergence vs executable market quote only
+        if market_is_valid:
+            divergence = ((ensemble_price - raw_market_price) / raw_market_price) * 100
+            divergence_dollars = ensemble_price - raw_market_price
+            print(f"\nDivergence:  {format_currency(divergence_dollars)} ({divergence:+.2f}%)")
+
+            if abs(divergence) < 2:
+                assessment = "FAIRLY PRICED"
+            elif divergence > 0:
+                assessment = "UNDERVALUED (Market < Fair Value)"
+            else:
+                assessment = "OVERVALUED (Market > Fair Value)"
         else:
-            assessment = "OVERVALUED (Market > Fair Value)"
-        
+            divergence = np.nan
+            divergence_dollars = np.nan
+            assessment = "MARKET DATA INVALID - NO MISPRICING SIGNAL"
+
         print(f"   Assessment: {assessment}\n")
         
         return {
@@ -145,6 +177,8 @@ class QuantFlow:
             'monte_carlo_ci': mc_ci,
             'ensemble_fair_value': ensemble_price,
             'market_price': market_price,
+            'raw_market_price': raw_market_price,
+            'market_price_is_valid': market_is_valid,
             'divergence_pct': divergence,
             'divergence_dollars': divergence_dollars,
             'assessment': assessment
@@ -251,42 +285,74 @@ class QuantFlow:
         
         # Get market pricing
         pricing = self.get_ensemble_pricing()
-        market_price = pricing['market_price']
+        market_price = pricing['raw_market_price']
+        market_is_valid = pricing['market_price_is_valid']
+        option_quote = self.market_data['option']
         
         # Calculate 'True' Divergence
         # If Market Price < Forecast Fair Value => Undervalued
+        if not market_is_valid:
+            print("! Mispricing signal disabled: no valid live market quote available.")
+            results['mispricing_score'] = 0.0
+            results['mispricing_assessment'] = "UNAVAILABLE - MARKET DATA INVALID"
+            results['forecast_fair_value'] = forecast_fair_value
+            results['divergence_pct'] = np.nan
+            results['signal_quality'] = {"actionable": False, "quality_tier": "D", "reason": "invalid_market_quote"}
+            return results
+
         divergence_dollars = forecast_fair_value - market_price
         divergence_pct = (divergence_dollars / market_price) * 100 if market_price > 0 else 0
-        
+
         print(f"Market Price: {format_currency(market_price)} (IV={current_iv:.2%})")
         print(f"Forecast Fair Value: {format_currency(forecast_fair_value)} (Forecast Vol={forecast_vol:.2%})")
         print(f"Divergence: {divergence_pct:+.2f}% ({format_currency(divergence_dollars)})")
 
-        # Score Calibration
-        # A 100/100 score should require meaningful divergence (e.g., > 20% or > $5)
-        # Score = min(100, abs(divergence_pct) * 2.5)  -> 40% divergence = 100 score
-        
-        base_score = min(100, abs(divergence_pct) * 2.5)
-        
-        # Bonus for edge cases
-        if abs(divergence_pct) < 5:
-             # Very small divergence is basically noise/spread
-             mispricing_score = max(5, base_score) # Low score
-             mispricing_assessment = "FAIRLY PRICED"
+        # Score calibration with uncertainty penalty from spread + MC interval
+        bid = option_quote.get('bid', market_price)
+        ask = option_quote.get('ask', market_price)
+        mispricing_score = self._uncertainty_adjusted_score(
+            divergence_pct=divergence_pct,
+            divergence_dollars=divergence_dollars,
+            bid=bid,
+            ask=ask,
+            mc_ci=pricing.get('monte_carlo_ci')
+        )
+
+        # Assessment thresholds anchored to score significance
+        if mispricing_score < 15:
+            mispricing_assessment = "FAIRLY PRICED / NOISE"
         elif divergence_pct > 0:
-             mispricing_score = base_score
-             mispricing_assessment = "UNDERVALUED (Buy Signal)" if mispricing_score > 50 else "Slightly Undervalued"
+            mispricing_assessment = "UNDERVALUED (Buy Signal)" if mispricing_score >= 50 else "Slightly Undervalued"
         else:
-             mispricing_score = base_score
-             mispricing_assessment = "OVERVALUED (Sell Signal)" if mispricing_score > 50 else "Slightly Overvalued"
+            mispricing_assessment = "OVERVALUED (Sell Signal)" if mispricing_score >= 50 else "Slightly Overvalued"
+
+        # Execution-aware signal diagnostics
+        signal_engine = SignalQualityEngine()
+        signal_quality = signal_engine.evaluate(
+            SignalInputs(
+                market_price=market_price,
+                forecast_fair_value=forecast_fair_value,
+                bid=bid,
+                ask=ask,
+                mc_ci=pricing.get('monte_carlo_ci'),
+                confidence=current_regime.get('confidence', 0.5),
+            )
+        )
         
         print(f"\nMispricing Score: {mispricing_score:.1f}/100")
         print(f"Assessment: {mispricing_assessment}")
+        print(
+            f"Signal Quality: Tier {signal_quality['quality_tier']} | "
+            f"P(edge): {signal_quality['prob_edge_real']:.1%} | "
+            f"Exp Return/Contract: {signal_quality['expected_return_pct']:+.2f}% | "
+            f"Kelly Cap: {signal_quality['kelly_fraction']:.2%}"
+        )
         
         results['mispricing_score'] = mispricing_score
         results['mispricing_assessment'] = mispricing_assessment
         results['forecast_fair_value'] = forecast_fair_value
         results['divergence_pct'] = divergence_pct
+        results['signal_quality'] = signal_quality
         
         return results
     
@@ -298,20 +364,30 @@ class QuantFlow:
         # Risk Management & Position Sizing
         sizer = PositionSizer(portfolio_value=100000) # Default $100k portfolio
         
-        # Calculate optimal stop loss (2 SD move)
-        suggested_stop = sizer.suggest_stop_loss(self.S, self.sigma, self.T * 365)
-        
+        # Calculate spot-based expected move (for risk-aware option stop estimate)
+        suggested_stop = sizer.suggest_stop_loss(self.S, self.sigma, self.T)
+
         # Get sizing recommendation
         # If we are BUYING, entry is the option price (Fair Value preferred if market is stale)
         pricing = self.get_ensemble_pricing()
         entry_price = pricing['market_price']
-        
-        sizing = sizer.calculate_position_size(entry_price, stop_loss_price=entry_price * 0.5) # Assuming 50% max loss on option
+
+        # Dynamic option stop estimate using Delta × underlying move (bounded by premium-based limits)
+        base_greeks = GreeksCalculator(
+            self.S, self.K, self.T, self.r, self.sigma, self.option_type, self.q
+        ).get_analytical_greeks()
+        delta = abs(base_greeks.get('delta', 0.5))
+        underlying_drop = max(0.0, self.S - suggested_stop)
+        estimated_option_drawdown = delta * underlying_drop
+        bounded_drawdown = min(entry_price * 0.90, max(entry_price * 0.25, estimated_option_drawdown))
+        option_stop = max(0.05, entry_price - bounded_drawdown)
+
+        sizing = sizer.calculate_position_size(entry_price, stop_loss_price=option_stop)
         
         print(f"\n{'='*70}")
         print(f"RISK MANAGEMENT & SIZING")
         print(f"{'='*70}\n")
-        print(f"Portfolio: $100,000  |  Max Risk: 2%  |  Stop Loss: 50% of Premium")
+        print(f"Portfolio: $100,000  |  Max Risk: 2%  |  Dynamic Stop: {format_currency(option_stop)}")
         print(f"Recommended Position: {sizing['recommended_contracts']} contracts")
         print(f"Cost: {format_currency(sizing['total_cost'])} ({sizing['pct_portfolio']:.1f}% of Portfolio)")
         print(f"Max Risk: {format_currency(sizing['total_risk'])}")
@@ -337,6 +413,32 @@ class QuantFlow:
             'scenarios': scenarios,
             'monte_carlo_distribution': mc_dist
         }
+
+    def run_research_validation(self, historical_options: pd.DataFrame,
+                                config_override: Dict = None) -> Dict:
+        """
+        Run research-grade walk-forward validation on an options panel.
+
+        Expected columns:
+        date, market_price, fair_value, bid, ask, future_option_price
+        """
+        cfg = ValidationConfig(**(config_override or {}))
+        validator = ResearchValidator(cfg)
+        report = validator.walk_forward_backtest(historical_options)
+
+        print(f"\n{'='*70}")
+        print(f"RESEARCH VALIDATION REPORT")
+        print(f"{'='*70}\n")
+        print(f"Trades: {report['n_trades']}")
+        print(f"Hit Rate: {report['hit_rate']:.1%}")
+        print(f"Avg Return: {report['avg_return']:+.2%}")
+        print(f"Sharpe (Ann.): {report['annualized_sharpe']:.2f}")
+        print(f"HAC t-stat: {report['hac_t_stat']:.2f}")
+        ci_low, ci_high = report['bootstrap_ci_95']
+        print(f"Bootstrap CI(95%) for mean return: [{ci_low:+.2%}, {ci_high:+.2%}]")
+        print(f"Economic Significance: {report['economic_significance'].upper()}")
+
+        return report
     
     def run_phase2_demo(self):
         """Run complete Phase 2 demonstration"""
