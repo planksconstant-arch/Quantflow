@@ -35,10 +35,11 @@ jobs:
         
     - name: Test with pytest and generate coverage
       run: |
-        pytest tests/ --cov=models --cov=analysis --cov=utils --cov-report=xml --cov-report=html --cov-report=term
+        pytest tests/ --cov=models --cov=analysis --cov=utils --cov=data --cov-report=xml --cov-report=html --cov-report=term
         
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v4
+      continue-on-error: true
       with:
         file: ./coverage.xml
         flags: unittests

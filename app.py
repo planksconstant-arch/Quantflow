@@ -3,7 +3,7 @@ QuantFlow Institutional HFT & Microstructure Terminal
 =====================================================
 State-of-the-Art Quantitative Trading Platform powered by Biomimetic Mormyrid
 Swarm Consensus Intelligence, Level 2/3 Limit Order Book dynamics, Hawkes point
-processes, and Swarm-Skewed Avellaneda-Stoikov Market Making.
+processes, Swarm-Skewed Avellaneda-Stoikov Market Making, and Free Real-Time Market APIs.
 """
 
 import sys
@@ -54,6 +54,7 @@ from models import (
     MonteCarloSimulation,
     GreeksCalculator,
 )
+from data.realtime_feed import realtime_feed, RealtimeQuote
 from utils import config, format_currency, format_percentage
 
 # Page Configuration
@@ -168,6 +169,17 @@ st.markdown("""
         font-size: 0.85rem;
         font-family: 'JetBrains Mono', monospace;
     }
+    .badge-live {
+        display: inline-block;
+        padding: 4px 12px;
+        background: rgba(0, 245, 160, 0.15);
+        color: #00F5A0;
+        border: 1px solid rgba(0, 245, 160, 0.4);
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 0.8rem;
+        font-family: 'JetBrains Mono', monospace;
+    }
     
     /* Code & Tables */
     code, pre {
@@ -184,17 +196,41 @@ if 'active_ticker' not in st.session_state:
     st.session_state.active_ticker = "NVDA"
 
 
-# Helper function to generate or retrieve live synthetic LOB stream
-@st.cache_data(ttl=60)
-def get_market_simulation_data(ticker: str, n_ticks: int = 300, initial_price: float = 140.0, seed: int = 42):
-    snapshots, df = generate_synthetic_lob_stream(
-        n_ticks=n_ticks,
-        initial_price=initial_price,
-        annual_vol=0.35,
-        tick_size=0.01,
-        seed=seed,
-    )
-    return snapshots, df
+# Helper function to generate or retrieve live LOB stream using free public APIs
+@st.cache_data(ttl=30)
+def get_market_simulation_data(ticker: str, n_ticks: int = 300, seed: int = 42, use_live_api: bool = True):
+    if use_live_api:
+        snapshots, df, quote = realtime_feed.get_market_stream(
+            ticker=ticker,
+            n_ticks=n_ticks,
+            seed=seed,
+        )
+        return snapshots, df, quote
+    else:
+        initial_prices = {
+            "NVDA": 140.0, "AAPL": 225.0, "TSLA": 210.0,
+            "MSFT": 420.0, "SPY": 560.0, "QQQ": 480.0, "BTC-USD": 62500.0, "ETH-USD": 3400.0
+        }
+        s0 = initial_prices.get(ticker, 140.0)
+        snapshots, df = generate_synthetic_lob_stream(
+            n_ticks=n_ticks,
+            initial_price=s0,
+            annual_vol=0.35,
+            tick_size=0.01,
+            seed=seed,
+        )
+        quote = RealtimeQuote(
+            ticker=ticker,
+            price=s0,
+            bid=round(s0 - 0.01, 2),
+            ask=round(s0 + 0.01, 2),
+            spread=0.02,
+            volume=500000.0,
+            timestamp=datetime.now(),
+            source="Synthetic Generator",
+            is_live=False
+        )
+        return snapshots, df, quote
 
 
 def run_full_swarm_pipeline(snapshots: List[L2Snapshot]):
@@ -262,16 +298,16 @@ def main():
     
     ticker_choice = st.sidebar.selectbox(
         "Target Instrument",
-        ["NVDA", "AAPL", "TSLA", "MSFT", "SPY", "QQQ", "BTC-USD"],
+        ["NVDA", "AAPL", "TSLA", "MSFT", "SPY", "QQQ", "BTC-USD", "ETH-USD"],
         index=0
     )
     st.session_state.active_ticker = ticker_choice
-    
-    initial_prices = {
-        "NVDA": 140.0, "AAPL": 225.0, "TSLA": 210.0,
-        "MSFT": 420.0, "SPY": 560.0, "QQQ": 480.0, "BTC-USD": 62500.0
-    }
-    s0 = initial_prices.get(ticker_choice, 140.0)
+
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("#### **Real-Time Data Feed**")
+    use_live_api = st.sidebar.toggle("Free Live API Feed (Binance / Yahoo)", value=True)
+    if st.sidebar.button("Refresh Live Quote", use_container_width=True):
+        st.cache_data.clear()
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("#### **Simulation Parameters**")
@@ -287,7 +323,12 @@ def main():
     n_sentinels = st.sidebar.slider("Sentinel Agents (VPIN Toxicity)", 2, 8, 4)
 
     # Load data and run pipeline
-    snapshots, raw_df = get_market_simulation_data(ticker=ticker_choice, n_ticks=n_ticks, initial_price=s0, seed=sim_seed)
+    snapshots, raw_df, live_quote = get_market_simulation_data(
+        ticker=ticker_choice,
+        n_ticks=n_ticks,
+        seed=sim_seed,
+        use_live_api=use_live_api,
+    )
     pipeline_df, latest_signal, latest_agents = run_full_swarm_pipeline(snapshots)
     latest_snap = snapshots[-1]
 
@@ -295,8 +336,9 @@ def main():
     col_h1, col_h2 = st.columns([3, 1])
     with col_h1:
         st.markdown('<div class="terminal-title">QUANTFLOW HFT TERMINAL</div>', unsafe_allow_html=True)
+        feed_label = f"[{live_quote.source}]"
         st.markdown(
-            f'<div class="terminal-sub">Institutional Market Microstructure & Biomimetic Mormyrid Swarm Intelligence | <b>{ticker_choice}</b> @ ${latest_snap.mid_price:.2f}</div>',
+            f'<div class="terminal-sub">Institutional Market Microstructure & Biomimetic Swarm Intelligence | <b>{ticker_choice}</b> @ ${latest_snap.mid_price:.2f} <span class="badge-live">{feed_label}</span></div>',
             unsafe_allow_html=True
         )
     with col_h2:
@@ -376,14 +418,14 @@ def main():
             ))
 
             fig_lob.update_layout(
-                title="Level 2 Order Book Depth Ladder (Top 8 Levels)",
+                title=f"Level 2 Order Book Depth Ladder ({ticker_choice} - {live_quote.source})",
                 template="plotly_dark",
                 paper_bgcolor="rgba(0,0,0,0)",
                 plot_bgcolor="rgba(15,23,42,0.6)",
                 height=380,
                 margin=dict(l=40, r=20, t=50, b=30),
                 barmode='group',
-                xaxis=dict(title="Aggregate Limit Volume (Shares)", gridcolor="rgba(255,255,255,0.05)"),
+                xaxis=dict(title="Aggregate Limit Volume", gridcolor="rgba(255,255,255,0.05)"),
                 yaxis=dict(title="Price Level", autorange="reversed"),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
@@ -814,7 +856,7 @@ def main():
         
         c_opt1, c_opt2, c_opt3 = st.columns(3)
         with c_opt1:
-            opt_strike = st.number_input("Strike Price ($)", value=s0, step=1.0)
+            opt_strike = st.number_input("Strike Price ($)", value=float(round(latest_snap.mid_price, 2)), step=1.0)
         with c_opt2:
             opt_days = st.slider("Days to Expiry", 5, 180, 45)
             opt_t = opt_days / 365.0
@@ -823,7 +865,7 @@ def main():
 
         # Calculate Option Pricing Models
         bs = BlackScholesModel(S=latest_snap.mid_price, K=opt_strike, T=opt_t, r=0.05, sigma=opt_vol)
-        bin_model = BinomialTreeModel(S=latest_snap.mid_price, K=opt_strike, T=opt_t, r=0.05, sigma=opt_vol, steps=50)
+        bin_model = BinomialTreeModel(S=latest_snap.mid_price, K=opt_strike, T=opt_t, r=0.05, sigma=opt_vol, n_steps=50)
         mc_model = MonteCarloSimulation(S=latest_snap.mid_price, K=opt_strike, T=opt_t, r=0.05, sigma=opt_vol, n_simulations=10000)
 
         bs_call = bs.price('call')
