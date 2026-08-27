@@ -91,6 +91,15 @@ class TestGreeks:
         greeks = calculate_greeks(100, 100, 0.1, 0.0, 0.2, 'call')
         assert 0.4 < greeks['delta'] < 0.6, f"ATM delta {greeks['delta']} not near 0.5"
 
+    def test_greeks_scaling_adjustments(self):
+        """Verify Theta/365 daily, Vega/100 1%, and Rho/100 1% scaling"""
+        model = BlackScholesModel(140, 140, 45/365, 0.05, 0.35)
+        greeks = model.all_greeks('call')
+        assert greeks['theta_per_day'] == pytest.approx(greeks['theta'] / 365.0)
+        assert greeks['vega_percent'] == pytest.approx(greeks['vega'] / 100.0)
+        assert greeks['rho_percent'] == pytest.approx(greeks['rho'] / 100.0)
+        assert greeks['theta_per_day'] < 0  # Time decay is negative for long call
+
 
 class TestInputValidation:
     def test_negative_strike(self):

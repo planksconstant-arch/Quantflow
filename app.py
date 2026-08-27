@@ -921,21 +921,42 @@ def main():
         with p_col4:
             st.metric("Monte Carlo Call", f"${mc_call:.2f}")
 
-        # Greeks Section
+        # Greeks Section (Properly Scaled to Industry Standards)
         st.markdown("#### **First & Second Order Greeks Sensitivity**")
         greeks = bs.all_greeks('call')
         
+        # Scaling adjustments:
+        # - Delta and Gamma: Raw partial derivatives (no scaling needed)
+        # - Theta: Raw annualized Theta / 365 for daily decay
+        # - Vega: Raw Vega / 100 for 1% IV move sensitivity
+        # - Rho: Raw Rho / 100 for 1% Interest Rate move sensitivity
+        daily_theta = greeks.get('theta_per_day', greeks['theta'] / 365.0)
+        pct_vega = greeks.get('vega_percent', greeks['vega'] / 100.0)
+        pct_rho = greeks.get('rho_percent', greeks['rho'] / 100.0)
+
         g1, g2, g3, g4, g5 = st.columns(5)
         with g1:
             st.metric("Delta", f"{greeks['delta']:.3f}")
         with g2:
             st.metric("Gamma", f"{greeks['gamma']:.4f}")
         with g3:
-            st.metric("Theta", f"${greeks['theta']:.3f}/day")
+            st.metric(
+                "Theta",
+                f"${daily_theta:.3f}/day",
+                help=f"Daily Time Decay (Annualized: ${greeks['theta']:.2f}/yr)"
+            )
         with g4:
-            st.metric("Vega", f"${greeks['vega']:.3f}/1% vol")
+            st.metric(
+                "Vega",
+                f"${pct_vega:.3f}/1% vol",
+                help=f"Per 1% IV change (Raw 100% Vol move: ${greeks['vega']:.2f})"
+            )
         with g5:
-            st.metric("Rho", f"${greeks['rho']:.3f}/1% rate")
+            st.metric(
+                "Rho",
+                f"${pct_rho:.3f}/1% rate",
+                help=f"Per 1% Rate change (Raw 100% Rate move: ${greeks['rho']:.2f})"
+            )
 
         # Almgren-Chriss Optimal Liquidation Trajectory
         st.markdown("#### **Almgren-Chriss Optimal Liquidation Curve**")
