@@ -22,6 +22,8 @@ class Config:
     HISTORICAL_DAYS: int = 365  # 12 months
     CACHE_DIR: str = os.path.join(os.path.dirname(__file__), "..", "data", "cache")
     CACHE_TTL_HOURS: int = 24
+    MARKETSTACK_API_KEY: str = os.getenv("MARKETSTACK_API_KEY", "24b40dae0167960b6bd3ec0ce5dfd4f9")
+    MARKETSTACK_BASE_URL: str = "http://api.marketstack.com/v1"
     
     # Pricing model parameters
     MC_SIMULATIONS: int = 100000

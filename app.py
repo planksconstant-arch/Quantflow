@@ -198,12 +198,14 @@ if 'active_ticker' not in st.session_state:
 
 # Helper function to generate or retrieve live LOB stream using free public APIs
 @st.cache_data(ttl=30)
-def get_market_simulation_data(ticker: str, n_ticks: int = 300, seed: int = 42, use_live_api: bool = True):
-    if use_live_api:
+def get_market_simulation_data(ticker: str, n_ticks: int = 300, seed: int = 42, provider_mode: str = "auto"):
+    if provider_mode != "synthetic":
+        preferred = "marketstack" if "Marketstack" in provider_mode else "auto"
         snapshots, df, quote = realtime_feed.get_market_stream(
             ticker=ticker,
             n_ticks=n_ticks,
             seed=seed,
+            preferred_source=preferred
         )
         return snapshots, df, quote
     else:
@@ -305,7 +307,21 @@ def main():
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("#### **Real-Time Data Feed**")
-    use_live_api = st.sidebar.toggle("Free Live API Feed (Binance / Yahoo)", value=True)
+    provider_mode = st.sidebar.selectbox(
+        "Market Data Source",
+        [
+            "Auto (Marketstack + Binance L2 + Yahoo Live)",
+            "Marketstack API (Official Key)",
+            "Yahoo Finance Live",
+            "Synthetic Simulation",
+        ],
+        index=0
+    )
+    
+    with st.sidebar.expander("API Key Configuration", expanded=False):
+        st.caption("Active Marketstack Key:")
+        st.code("24b40dae0167960b6bd3ec0ce5dfd4f9", language="text")
+    
     if st.sidebar.button("Refresh Live Quote", use_container_width=True):
         st.cache_data.clear()
 
@@ -327,7 +343,7 @@ def main():
         ticker=ticker_choice,
         n_ticks=n_ticks,
         seed=sim_seed,
-        use_live_api=use_live_api,
+        provider_mode=provider_mode,
     )
     pipeline_df, latest_signal, latest_agents = run_full_swarm_pipeline(snapshots)
     latest_snap = snapshots[-1]

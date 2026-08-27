@@ -2,6 +2,7 @@
 QuantFlow Real-Time Market Data Feed
 ====================================
 High-performance real-time market data providers using free public APIs:
+- Marketstack API for institutional global equities and EOD/latest market feeds
 - Binance & Coinbase Public APIs for live Level 2 Limit Order Book depth (Crypto)
 - Yahoo Finance API for live equities & indices quotes and option chains
 - Automatic zero-latency fallback to synthetic high-frequency microstructure streams
@@ -9,7 +10,9 @@ High-performance real-time market data providers using free public APIs:
 
 import json
 import logging
+import os
 import urllib.request
+import urllib.parse
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -20,6 +23,7 @@ import pandas as pd
 import yfinance as yf
 
 from models.microstructure.order_book import LimitOrderBook, L2Snapshot, OrderSide, generate_synthetic_lob_stream
+from utils.config import config
 
 logger = logging.getLogger(__name__)
 
@@ -58,8 +62,79 @@ class RealtimeMarketFeed:
         "ETH-USD": 3400.0,
     }
 
-    def __init__(self, timeout: float = 3.0):
+    def __init__(self, timeout: float = 4.0, marketstack_key: Optional[str] = None):
         self.timeout = timeout
+        self.marketstack_key = marketstack_key or getattr(config, "MARKETSTACK_API_KEY", "24b40dae0167960b6bd3ec0ce5dfd4f9")
+
+    def fetch_marketstack_quote(self, ticker: str, api_key: Optional[str] = None) -> Optional[RealtimeQuote]:
+        """
+        Fetch authentic equity quote using Marketstack REST API.
+        """
+        key = api_key or self.marketstack_key
+        if not key:
+            return None
+
+        # Clean symbol (e.g. BTC-USD is crypto, Marketstack expects stock tickers like NVDA, AAPL)
+        clean_ticker = ticker.split("-")[0].upper()
+        url = f"http://api.marketstack.com/v1/eod/latest?access_key={key}&symbols={clean_ticker}"
+
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "QuantFlow/2.0"})
+            with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                status = getattr(response, "status", None) or getattr(response, "code", 200)
+                if status == 200:
+                    payload = json.loads(response.read().decode("utf-8"))
+                    data = payload.get("data", [])
+                    if data and len(data) > 0:
+                        item = data[0]
+                        price = float(item.get("close") or item.get("adj_close") or item.get("open") or 0.0)
+                        if price > 0:
+                            vol = float(item.get("volume") or 0.0)
+                            bid = round(price - 0.01, 2)
+                            ask = round(price + 0.01, 2)
+                            return RealtimeQuote(
+                                ticker=ticker,
+                                price=price,
+                                bid=bid,
+                                ask=ask,
+                                spread=0.02,
+                                volume=vol,
+                                timestamp=datetime.now(),
+                                source=f"Marketstack API ({item.get('exchange', 'XNAS')})",
+                                is_live=True,
+                            )
+        except Exception as e:
+            logger.debug(f"Marketstack fetch failed for {ticker}: {e}")
+
+        return None
+
+    def fetch_marketstack_eod(self, ticker: str, limit: int = 100, api_key: Optional[str] = None) -> Optional[pd.DataFrame]:
+        """
+        Fetch historical EOD dataframe from Marketstack API.
+        """
+        key = api_key or self.marketstack_key
+        if not key:
+            return None
+
+        clean_ticker = ticker.split("-")[0].upper()
+        url = f"http://api.marketstack.com/v1/eod?access_key={key}&symbols={clean_ticker}&limit={limit}"
+
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "QuantFlow/2.0"})
+            with urllib.request.urlopen(req, timeout=self.timeout) as response:
+                status = getattr(response, "status", None) or getattr(response, "code", 200)
+                if status == 200:
+                    payload = json.loads(response.read().decode("utf-8"))
+                    data = payload.get("data", [])
+                    if data:
+                        df = pd.DataFrame(data)
+                        df["date"] = pd.to_datetime(df["date"])
+                        df = df.sort_values("date").reset_index(drop=True)
+                        return df
+        except Exception as e:
+            logger.debug(f"Marketstack historical EOD failed for {ticker}: {e}")
+
+        return None
 
     def fetch_live_crypto_order_book(self, symbol: str = "BTC-USD", limit: int = 20) -> Optional[LimitOrderBook]:
         """
@@ -118,10 +193,17 @@ class RealtimeMarketFeed:
 
         return None
 
-    def fetch_live_equity_quote(self, ticker: str) -> RealtimeQuote:
+    def fetch_live_equity_quote(self, ticker: str, preferred_source: str = "auto") -> RealtimeQuote:
         """
-        Fetch live real-time equity/index quote via yfinance.
+        Fetch live real-time equity/index quote via Marketstack or yfinance with fallback.
         """
+        # 1. Marketstack API (if preferred or auto for non-crypto)
+        if preferred_source in ("marketstack", "auto") and not ("BTC" in ticker.upper() or "ETH" in ticker.upper()):
+            ms_quote = self.fetch_marketstack_quote(ticker)
+            if ms_quote is not None:
+                return ms_quote
+
+        # 2. Yahoo Finance API
         try:
             stock = yf.Ticker(ticker)
             fast = getattr(stock, "fast_info", None)
@@ -163,7 +245,7 @@ class RealtimeMarketFeed:
         except Exception as e:
             logger.debug(f"Failed to fetch live quote for {ticker}: {e}")
 
-        # High-Fidelity Fallback
+        # 3. High-Fidelity Fallback
         fallback_price = self.EQUITY_DEFAULTS.get(ticker.upper(), 100.0)
         return RealtimeQuote(
             ticker=ticker,
@@ -200,12 +282,13 @@ class RealtimeMarketFeed:
         n_ticks: int = 300,
         initial_price: Optional[float] = None,
         annual_vol: float = 0.35,
-        seed: int = 42
+        seed: int = 42,
+        preferred_source: str = "auto"
     ) -> Tuple[List[L2Snapshot], pd.DataFrame, RealtimeQuote]:
         """
         Get market stream seeded with authentic live prices.
         """
-        quote = self.fetch_live_equity_quote(ticker)
+        quote = self.fetch_live_equity_quote(ticker, preferred_source=preferred_source)
         s0 = quote.price if (initial_price is None or initial_price <= 0) else initial_price
 
         # If crypto, attempt to seed with live crypto order book

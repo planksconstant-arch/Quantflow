@@ -1,4 +1,4 @@
-"""Unit tests for free Real-Time Market Data Provider."""
+"""Unit tests for free Real-Time Market Data Provider & Marketstack API."""
 
 import os
 import sys
@@ -17,10 +17,42 @@ class TestRealtimeMarketFeed:
         assert feed is not None
         assert "BTC-USD" in feed.CRYPTO_SYMBOLS
         assert "NVDA" in feed.EQUITY_DEFAULTS
+        assert feed.marketstack_key == "24b40dae0167960b6bd3ec0ce5dfd4f9"
+
+    def test_marketstack_mocked_quote(self):
+        feed = RealtimeMarketFeed(marketstack_key="test_key")
+        mock_payload = b'{"data": [{"close": 210.50, "open": 209.00, "volume": 5000000.0, "exchange": "XNAS", "symbol": "NVDA"}]}'
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.code = 200
+        mock_resp.read.return_value = mock_payload
+        mock_resp.__enter__.return_value = mock_resp
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            quote = feed.fetch_marketstack_quote("NVDA")
+            assert quote is not None
+            assert quote.price == pytest.approx(210.50)
+            assert quote.ticker == "NVDA"
+            assert "Marketstack" in quote.source
+
+    def test_marketstack_mocked_eod(self):
+        feed = RealtimeMarketFeed(marketstack_key="test_key")
+        mock_payload = b'{"data": [{"date": "2026-08-25T00:00:00+0000", "close": 209.0, "open": 208.0, "volume": 1000000.0}, {"date": "2026-08-26T00:00:00+0000", "close": 212.0, "open": 210.0, "volume": 1200000.0}]}'
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.code = 200
+        mock_resp.read.return_value = mock_payload
+        mock_resp.__enter__.return_value = mock_resp
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            df = feed.fetch_marketstack_eod("NVDA", limit=2)
+            assert df is not None
+            assert len(df) == 2
+            assert "close" in df.columns
 
     def test_fallback_equity_quote(self):
         feed = RealtimeMarketFeed()
-        quote = feed.fetch_live_equity_quote("NVDA")
+        quote = feed.fetch_live_equity_quote("NVDA", preferred_source="fallback")
         assert quote is not None
         assert quote.ticker == "NVDA"
         assert quote.price > 0
