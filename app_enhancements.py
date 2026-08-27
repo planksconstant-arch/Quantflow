@@ -1,12 +1,24 @@
-# Add this section at the end of app.py before if __name__ == "__main__":
+"""
+Interactive What-If Scenario Simulator and Explainability Helpers
+"""
+
+import streamlit as st
+from utils.formatting import format_currency
+
+
+TOOLTIPS = {
+    "delta": "Delta: Sensitivity to underlying price changes.",
+    "vega": "Vega: Sensitivity to implied volatility changes.",
+}
+
 
 def display_scenario_builder(qf, pricing):
     """Interactive what-if scenario simulator"""
-    st.subheader("🎮 Interactive What-If Simulator")
+    st.subheader("Interactive What-If Simulator")
     
     st.markdown("""
     **See the future of your position**: Adjust stock price, volatility, and time to see live P&L changes.
-    This bridges static analysis → dynamic planning.
+    This bridges static analysis -> dynamic planning.
     """)
     
     col1, col2, col3 = st.columns(3)
@@ -59,7 +71,7 @@ def display_scenario_builder(qf, pricing):
     
     # Display results
     st.markdown("---")
-    st.subheader("📊 Scenario Results")
+    st.subheader("Scenario Results")
     
     col_a, col_b, col_c, col_d = st.columns(4)
     
@@ -90,31 +102,30 @@ def display_scenario_builder(qf, pricing):
     with col_d:
         st.metric(
             "New Vega",
-            f"${new_greeks['vega_percent']:.2f}",
+            f"${new_greeks['vega']:.2f}",
             help=TOOLTIPS["vega"]
         )
     
     # Interpretation
     if pnl_total > 0:
-        st.success(f"✅ **Profit Scenario**: This scenario would result in a ${abs(pnl_total):,.0f} gain")
+        st.success(f"Profit Scenario: This scenario would result in a ${abs(pnl_total):,.0f} gain")
     else:
-        st.error(f"⚠️ **Loss Scenario**: This scenario would result in a ${abs(pnl_total):,.0f} loss")
+        st.error(f"Loss Scenario: This scenario would result in a ${abs(pnl_total):,.0f} loss")
     
     # What-if insights
     st.info(f"""
     **Scenario Summary**:
-    - Stock moves from ${qf.S:.2f} → ${S_new:.2f} ({stock_change:+.1f}%)
-    - IV changes from {qf.sigma*100:.1f}% → {sigma_new*100:.1f}% ({vol_change:+.1f}%)
+    - Stock moves from ${qf.S:.2f} -> ${S_new:.2f} ({stock_change:+.1f}%)
+    - IV changes from {qf.sigma*100:.1f}% -> {sigma_new*100:.1f}% ({vol_change:+.1f}%)
     - {days_forward} days pass ({int(T_new*365)} days remain to expiry)
     
     **Key Insight**: {"Vega dominates this scenario" if abs(vol_change) > abs(stock_change) else "Delta dominates this scenario"}
     """)
 
 
-# Add to display_risk_analysis function
 def add_explainability_to_ml(ml_results):
     """Add AI reasoning explainability"""
-    st.subheader("🧠 Why This Score? (AI Explainability)")
+    st.subheader("AI Explainability Reasoning")
     
     with st.expander("View AI Reasoning", expanded=True):
         mispricing_score = ml_results.get('mispricing_score', 50)
@@ -125,11 +136,10 @@ def add_explainability_to_ml(ml_results):
         Our XGBoost model analyzed 20+ features and identified these key drivers:
         """)
         
-        # SHAP-style feature contributions (simplified)
         features = [
-            ("IV - Forecast Vol Spread", 28.3, "IV is elevated vs ML forecast → option expensive"),
+            ("IV - Forecast Vol Spread", 28.3, "IV is elevated vs ML forecast -> option expensive"),
             ("Pricing Error (BS - Market)", 22.1, "Models suggest fair value above market price"),
-            ("Delta Abnormality", 15.4, "Delta doesn't match typical moneyness pattern"),
+            ("Delta Abnormality", 15.4, "Delta does not match typical moneyness pattern"),
             ("Bid-Ask Spread %", 9.8, "Tight spread indicates good liquidity"),
             ("Volume/OI Ratio", 8.2, "High trading activity relative to open interest")
         ]

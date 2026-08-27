@@ -10,6 +10,7 @@ import sys
 import os
 import base64
 from datetime import datetime, timedelta
+from typing import List, Dict, Tuple, Optional
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
