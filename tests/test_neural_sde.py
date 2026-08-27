@@ -4,7 +4,7 @@ Tests for Neural SDE Module
 """
 
 import pytest
-import torch
+torch = pytest.importorskip("torch")
 import numpy as np
 import sys
 import os

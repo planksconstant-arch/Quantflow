@@ -1,6 +1,12 @@
-"""
-QuantFlow Main Entry Point with Phase 2 ML Integration
-"""
+import sys
+import os
+
+if sys.platform.startswith('win'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
 
 import pandas as pd
 import numpy as np
@@ -488,13 +494,55 @@ class QuantFlow:
             'ml_results': ml_results,
             'scenario_results': scenario_results
         }
+    
+    def run_hft_swarm_demo(self, n_ticks: int = 150):
+        """Run complete High-Frequency Trading & Biomimetic Mormyrid Swarm demonstration"""
+        print("\n" + "="*70)
+        print("QUANTFLOW HFT ENGINE: BIOMIMETIC MORMYRID SWARM CONSENSUS")
+        print("="*70 + "\n")
+        
+        from models.microstructure import generate_synthetic_lob_stream
+        from models.swarm import MormyridSwarmConsensusEngine
+        from models.hft_execution import SwarmAvellanedaStoikov, HFTSimulator
+
+        # 1. Generate Synthetic LOB Stream
+        spot = self.S if self.S else 140.0
+        snapshots, _ = generate_synthetic_lob_stream(n_ticks=n_ticks, initial_price=spot, seed=42)
+        print(f"[OK] Generated {len(snapshots)} Level 2 LOB ticks for {self.ticker}")
+        
+        # 2. Initialize Mormyrid Swarm Engine
+        swarm = MormyridSwarmConsensusEngine(n_scouts=6, n_predators=8, n_schoolers=10, n_sentinels=4)
+        print(f"[OK] Initialized Biomimetic Mormyrid Swarm (28 sensory agents)")
+        
+        # 3. Initialize Swarm Avellaneda-Stoikov MM
+        as_mm = SwarmAvellanedaStoikov(gamma=0.15, kappa=1.8, sigma=0.35, swarm_skew_multiplier=1.5)
+        
+        # 4. Run Event-Driven HFT Simulation
+        sim = HFTSimulator(initial_cash=100000.0)
+        res = sim.run_simulation(snapshots, strategy_type="swarm_as", swarm_engine=swarm, as_model=as_mm)
+        
+        print("\n" + "-"*70)
+        print("HFT SWARM SIMULATION PERFORMANCE SUMMARY:")
+        print("-"*70)
+        print(f"  Total PnL             : ${res.total_pnl:,.2f}")
+        print(f"  Realized PnL          : ${res.realized_pnl:,.2f}")
+        print(f"  Unrealized PnL        : ${res.unrealized_pnl:,.2f}")
+        print(f"  Total Trades Filled   : {res.total_trades} (Buys: {res.buy_trades}, Sells: {res.sell_trades})")
+        print(f"  Sharpe Ratio (Ann.)   : {res.sharpe_ratio:.2f}")
+        print(f"  Max Drawdown          : ${res.max_drawdown:,.2f}")
+        print(f"  Win Rate              : {res.win_rate*100:.1f}%")
+        print(f"  Avg Trade PnL         : ${res.avg_trade_pnl:.2f}")
+        print(f"  Peak Inventory        : {res.max_inventory:.0f} shares")
+        print("-"*70 + "\n")
+        
+        return res
 
 
 def main():
     """Main entry point"""
     qf = QuantFlow()
-    results = qf.run_phase2_demo()
-    return results
+    hft_res = qf.run_hft_swarm_demo()
+    return hft_res
 
 
 if __name__ == "__main__":

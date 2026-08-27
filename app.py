@@ -1,1153 +1,887 @@
 """
-QuantFlow Interactive Dashboard
-Streamlit web application for real-time options analysis
+QuantFlow Institutional HFT & Microstructure Terminal
+=====================================================
+State-of-the-Art Quantitative Trading Platform powered by Biomimetic Mormyrid
+Swarm Consensus Intelligence, Level 2/3 Limit Order Book dynamics, Hawkes point
+processes, and Swarm-Skewed Avellaneda-Stoikov Market Making.
 """
 
-import streamlit as st
-import pandas as pd
-import numpy as np
-import plotly.graph_objects as go
-import plotly.express as px
-from datetime import datetime, timedelta
-
-# Import QuantFlow modules
 import sys
 import os
+import base64
+from datetime import datetime, timedelta
+import numpy as np
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
+from plotly.subplots import make_subplots
+import streamlit as st
 
 # Enforce UTF-8 encoding for Windows consoles
 if sys.platform.startswith('win'):
-    sys.stdout.reconfigure(encoding='utf-8')
-    sys.stderr.reconfigure(encoding='utf-8')
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
 
-sys.path.append('.')
+sys.path.append(os.path.abspath(os.path.dirname(__file__)))
 
-from main import QuantFlow
-from models import GreeksCalculator, BlackScholesModel
-from analysis import ScenarioAnalyzer, PortfolioAnalyzer
-from analysis.portfolio_greeks import OptionPosition
+# QuantFlow imports
+from models import (
+    LimitOrderBook,
+    L2Snapshot,
+    OrderSide,
+    generate_synthetic_lob_stream,
+    MultiLevelOFI,
+    VPIN,
+    StoikovMicroPrice,
+    HawkesProcess,
+    MormyridSwarmConsensusEngine,
+    SwarmConsensusSignal,
+    AgentRole,
+    FishAgent,
+    SwarmAvellanedaStoikov,
+    MarketMakerQuotes,
+    AlmgrenChrissExecution,
+    AlgorithmicRouter,
+    HFTSimulator,
+    SimulationResult,
+    HFTRiskEngine,
+    BlackScholesModel,
+    BinomialTreeModel,
+    MonteCarloSimulation,
+    GreeksCalculator,
+)
 from utils import config, format_currency, format_percentage
 
-# Page config
+# Page Configuration
 st.set_page_config(
-    page_title="QuantFlow - Options Intelligence",
-    page_icon="📊",
+    page_title="QuantFlow - Institutional HFT & Swarm Terminal",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS - Calm Professional Theme
-import base64
-import os
-
-def get_img_as_base64(file_path):
-    """Convert image to base64 for embedding"""
-    with open(file_path, "rb") as f:
-        data = f.read()
-    return base64.b64encode(data).decode()
-
-# Load background image
-# Load background image (using minimalist version)
-bg_img_path = os.path.join("assets", "background_minimal.png")
-if not os.path.exists(bg_img_path):
-    # Fallback to standard bg if minimal not found
-    bg_img_path = os.path.join("assets", "background.png")
-
-if os.path.exists(bg_img_path):
-    img_b64 = get_img_as_base64(bg_img_path)
-    bg_style = f"""
-    .stApp {{
-        background-color: #050510;
-        background-image: url("data:image/png;base64,{img_b64}");
-        background-size: cover;
-        background-attachment: fixed;
-        color: #ffffff;
-    }}
-    """
-else:
-    bg_style = ""
-
-st.markdown(f"""
+# Custom Styling (Institutional Dark Glassmorphism)
+st.markdown("""
 <style>
-    /* RESET and BASE */
-    {bg_style}
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Outfit:wght@300;400;600;800&display=swap');
     
-    /* Overlay for readability - darker and cleaner */
-    .stApp::before {{
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: radial-gradient(circle at center, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.92) 100%);
-        pointer-events: none;
-        z-index: -1;
-    }}
-
-    /* TYPOGRAPHY - Enhanced Contrast */
-    h1, h2, h3 {{
-        font-family: 'Inter', sans-serif;
-        color: #fff;
-        text-shadow: 0 2px 4px rgba(0,0,0,0.8);
-    }}
+    .stApp {
+        background: radial-gradient(circle at 15% 15%, #0d111e 0%, #06080f 100%);
+        color: #e2e8f0;
+        font-family: 'Outfit', sans-serif;
+    }
     
-    .main-header {{
-        font-size: 3.5rem;
+    /* Typography & Hierarchy */
+    h1, h2, h3, h4 {
+        font-family: 'Outfit', sans-serif;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+    }
+    
+    .terminal-title {
+        font-size: 2.6rem;
         font-weight: 800;
-        text-align: center;
-        margin-top: 1rem;
-        color: #fff;
-        text-shadow: 0 0 30px rgba(0, 255, 136, 0.4);
-    }}
+        background: linear-gradient(135deg, #00F5A0 0%, #00D9F5 50%, #7B61FF 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        text-shadow: 0 0 40px rgba(0, 245, 160, 0.25);
+        margin-bottom: 0.2rem;
+    }
     
-    p, li, .stMarkdown {{
+    .terminal-sub {
         font-size: 1.05rem;
-        color: #e0e0e0 !important; /* Higher contrast text */
-    }}
+        color: #94a3b8;
+        font-weight: 400;
+        margin-bottom: 1.5rem;
+    }
 
-    /* GLASS CARDS - HIGHER OPACITY FOR READABILITY */
-    .glass-card, div[data-testid="stMetric"], div[data-testid="stExpander"], .feature-card {{
-        background: rgba(15, 20, 35, 0.85) !important; /* Less transparent */
-        backdrop-filter: blur(15px) !important;
-        border: 1px solid rgba(255, 255, 255, 0.15) !important;
-        border-radius: 16px !important;
-        padding: 1.5rem !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5) !important;
-    }}
+    /* Glassmorphism Metric Cards */
+    div[data-testid="stMetric"] {
+        background: rgba(15, 23, 42, 0.75) !important;
+        backdrop-filter: blur(16px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.08) !important;
+        border-radius: 12px !important;
+        padding: 1rem 1.2rem !important;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+    }
     
-    /* FEATURE CARD STYLING */
-    .feature-card {{
-        text-align: center;
-        height: 100%;
-        transition: transform 0.3s ease;
-    }}
-    .feature-card:hover {{
-        transform: translateY(-5px);
-        border-color: rgba(0, 255, 136, 0.5) !important;
-    }}
-    .feature-icon {{
-        font-size: 3rem;
-        margin-bottom: 1rem;
-        display: block;
-    }}
-    .feature-title {{
-        font-size: 1.4rem;
-        font-weight: bold;
-        color: #00FF88;
-        margin-bottom: 0.5rem;
-    }}
-
+    div[data-testid="stMetricLabel"] p {
+        color: #94a3b8 !important;
+        font-size: 0.85rem !important;
+        font-weight: 600 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+    }
+    
+    div[data-testid="stMetricValue"] div {
+        color: #f8fafc !important;
+        font-family: 'JetBrains Mono', monospace !important;
+        font-size: 1.6rem !important;
+        font-weight: 700 !important;
+    }
+    
+    /* Regime Badges */
+    .badge-momentum {
+        display: inline-block;
+        padding: 4px 12px;
+        background: rgba(239, 68, 68, 0.2);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 0.85rem;
+        font-family: 'JetBrains Mono', monospace;
+    }
+    .badge-reversion {
+        display: inline-block;
+        padding: 4px 12px;
+        background: rgba(16, 185, 129, 0.2);
+        color: #34d399;
+        border: 1px solid rgba(16, 185, 129, 0.4);
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 0.85rem;
+        font-family: 'JetBrains Mono', monospace;
+    }
+    .badge-stable {
+        display: inline-block;
+        padding: 4px 12px;
+        background: rgba(59, 130, 246, 0.2);
+        color: #60a5fa;
+        border: 1px solid rgba(59, 130, 246, 0.4);
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 0.85rem;
+        font-family: 'JetBrains Mono', monospace;
+    }
+    .badge-toxic {
+        display: inline-block;
+        padding: 4px 12px;
+        background: rgba(245, 158, 11, 0.2);
+        color: #fbbf24;
+        border: 1px solid rgba(245, 158, 11, 0.4);
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 0.85rem;
+        font-family: 'JetBrains Mono', monospace;
+    }
+    
+    /* Code & Tables */
+    code, pre {
+        font-family: 'JetBrains Mono', monospace !important;
+    }
 </style>
 """, unsafe_allow_html=True)
-# Onboarding tooltips dictionary
-TOOLTIPS = {
-    "ensemble": "📊 **Ensemble Pricing**: A weighted average of Black-Scholes, Binomial, and Monte Carlo models to reduce individual model errors and find the 'Mathematical Truth'.",
-    "delta": "📈 **Delta**: Your 'Stock Equivalent'—how much the option gains for every $1 move in the stock. Delta of 0.62 = option moves $0.62 per $1 stock move.",
-    "gamma": "⚡ **Gamma**: The 'Accelerator'—how fast your Delta changes as the stock price moves. High Gamma = rapidly changing risk exposure.",
-    "theta": "⏰ **Theta**: Time decay in dollars per day. This is money you lose every day just from the passage of time.",
-    "vega": "🌊 **Vega**: Volatility sensitivity. How much you gain/lose for every 1% change in implied volatility.",
-    "var": "⚠️ **VaR (Value at Risk)**: The dollar amount your position could lose with 95% or 99% statistical certainty in normal markets.",
-    "cvar": "🔴 **CVaR (Expected Shortfall)**: The average loss in the absolute worst 5% of market outcomes. Your 'tail risk'.",
-    "regime": "🎯 **Market Regime**: Our AI identifies the current market environment (Low/High Vol × Bull/Bear) so Greeks can be adjusted for the conditions you actually face.",
-    "mispricing": "🔍 **Mispricing Score**: 0-100 scale measuring statistical edge. 80+ means the math is heavily in your favor. Based on XGBoost + SHAP analysis.",
-    "vanna": "📊 **Vanna**: How Delta changes as Volatility changes. Important for understanding vol crush scenarios.",
-    "charm": "⏱️ **Charm**: How Delta decays as time passes (Delta-bleed). Critical for longer-dated positions."
-}
 
-def show_tooltip(key):
-    """Display tooltip for a metric"""
-    if key in TOOLTIPS:
-        st.info(TOOLTIPS[key])
 
-# Initialize session state
-if 'analysis_run' not in st.session_state:
-    st.session_state.analysis_run = False
-if 'results' not in st.session_state:
-    st.session_state.results = None
+# Initialize Cache / Session State
+if 'simulation_cache' not in st.session_state:
+    st.session_state.simulation_cache = None
+if 'active_ticker' not in st.session_state:
+    st.session_state.active_ticker = "NVDA"
+
+
+# Helper function to generate or retrieve live synthetic LOB stream
+@st.cache_data(ttl=60)
+def get_market_simulation_data(ticker: str, n_ticks: int = 300, initial_price: float = 140.0, seed: int = 42):
+    snapshots, df = generate_synthetic_lob_stream(
+        n_ticks=n_ticks,
+        initial_price=initial_price,
+        annual_vol=0.35,
+        tick_size=0.01,
+        seed=seed,
+    )
+    return snapshots, df
+
+
+def run_full_swarm_pipeline(snapshots: List[L2Snapshot]):
+    """Execute Mormyrid Swarm and high-frequency signal pipeline over snapshots"""
+    swarm_engine = MormyridSwarmConsensusEngine(n_scouts=6, n_predators=8, n_schoolers=10, n_sentinels=4)
+    ofi_calc = MultiLevelOFI(depth_levels=5)
+    vpin_calc = VPIN(bucket_size=300.0)
+    hawkes = HawkesProcess(alpha=0.65, beta=1.8, mu=0.9)
+
+    records = []
+    event_times = []
+    agent_history = []
+
+    for i, snap in enumerate(snapshots):
+        t = snap.timestamp
+        mid = snap.mid_price
+        
+        ofi = ofi_calc.update(snap)
+        if len(records) > 0:
+            vpin_calc.update_trade(mid, snap.total_bid_depth * 0.08, records[-1]["mid_price"])
+        vpin = vpin_calc.get_vpin()
+
+        event_times.append(t)
+        hawkes_intensity = hawkes.intensity(t, np.array(event_times))
+        branching = hawkes.branching_ratio()
+
+        micro_dev_bps = ((snap.micro_price - mid) / mid) * 10000.0
+        rel_spread_bps = (snap.spread / mid) * 10000.0
+
+        signal: SwarmConsensusSignal = swarm_engine.step_market_state(
+            ofi=ofi,
+            vpin=vpin,
+            hawkes_intensity=hawkes_intensity,
+            micro_price_dev=micro_dev_bps,
+            relative_spread=rel_spread_bps,
+            hawkes_branching_ratio=branching,
+        )
+
+        records.append({
+            "timestamp": t,
+            "mid_price": mid,
+            "micro_price": snap.micro_price,
+            "spread": snap.spread,
+            "ofi": ofi,
+            "vpin": vpin,
+            "hawkes_intensity": hawkes_intensity,
+            "drift_bps": signal.predicted_drift_bps,
+            "jump_prob": signal.jump_probability,
+            "crowding_index": signal.market_crowding_index,
+            "adverse_risk": signal.adverse_selection_risk,
+            "confidence": signal.swarm_confidence,
+            "regime": signal.dominant_regime,
+            "quote_skew": signal.optimal_quote_skew,
+        })
+        
+        if i == len(snapshots) - 1:
+            agent_history = signal.agent_states
+
+    return pd.DataFrame(records), signal, agent_history
 
 
 def main():
-    """Main dashboard function"""
+    # Sidebar Controls
+    st.sidebar.markdown("### **QuantFlow Engine Controls**")
     
-    # Header
-    st.markdown('<h1 class="main-header">🚀 QuantFlow - AI-Powered Options Intelligence</h1>', 
-                unsafe_allow_html=True)
-    st.markdown('<p style="text-align: center; color: #aaa;">Where Classical Finance Meets Machine Learning</p>', unsafe_allow_html=True)
+    ticker_choice = st.sidebar.selectbox(
+        "Target Instrument",
+        ["NVDA", "AAPL", "TSLA", "MSFT", "SPY", "QQQ", "BTC-USD"],
+        index=0
+    )
+    st.session_state.active_ticker = ticker_choice
     
-    # Sidebar - User Inputs
-    st.sidebar.header("⚙️ Configuration")
-    
-    # Option parameters
-    st.sidebar.subheader("Option Details")
-    
-    # Major tickers dropdown with free text option
-    major_tickers = [
-        "NVDA", "AAPL", "TSLA", "MSFT", "GOOGL", "AMZN", "META", "AMD", "SPY", "QQQ",
-        "COIN", "INTC", "NFLX", "DIS", "JPM", "V", "WMT", "KO", "MSTR", "PLTR"
-    ]
-    selected_ticker = st.sidebar.selectbox("Ticker", major_tickers, index=0)
-    
-    # Allow custom ticker entry if needed
-    ticker = selected_ticker
-    
-    option_type = st.sidebar.selectbox("Option Type", ["call", "put"])
-    strike = st.sidebar.number_input("Strike Price ($)", value=140.0, min_value=1.0)
-    
-    # Expiry date
-    days_out = st.sidebar.slider("Days to Expiry", min_value=1, max_value=365, value=93)
-    expiry_date = (datetime.now() + timedelta(days=days_out)).strftime("%Y-%m-%d")
-    
-    # Analysis button
-    run_analysis = st.button("🚀 Run Analysis", type="primary", use_container_width=True)
-    force_refresh = st.checkbox("Force Refresh Data", value=False)
-    
-    # Main content area
-    if run_analysis or st.session_state.analysis_run:
-        st.session_state.analysis_run = True
-        
-        with st.spinner(f"🔄 Fetching real-time market data for {ticker}..."):
-            # Initialize QuantFlow
-            qf = QuantFlow(ticker=ticker, option_type=option_type, 
-                          strike=strike, expiry=expiry_date)
-            
-            # Run analysis
-            try:
-                qf.fetch_data(force_refresh=force_refresh)
-                pricing = qf.get_ensemble_pricing()
-                greeks = qf.get_greeks()
+    initial_prices = {
+        "NVDA": 140.0, "AAPL": 225.0, "TSLA": 210.0,
+        "MSFT": 420.0, "SPY": 560.0, "QQQ": 480.0, "BTC-USD": 62500.0
+    }
+    s0 = initial_prices.get(ticker_choice, 140.0)
 
-                
-                ml_results = qf.run_ml_analysis()
-                scenario_results = qf.run_scenario_analysis()
-                
-                st.session_state.results = {
-                    'qf': qf,
-                    'pricing': pricing,
-                    'greeks': greeks,
-                    'ml_results': ml_results,
-                    'scenario_results': scenario_results
-                }
-            except Exception as e:
-                st.error(f"⚠️ Error running analysis: {str(e)}")
-                return
-        
-        results = st.session_state.results
-        qf = results['qf']
-        pricing = results['pricing']
-        greeks = results['greeks']
-        ml_results = results['ml_results']
-        scenario_results = results['scenario_results']
-        
-        # Display results in tabs
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
-            "📊 Summary", "💰 Pricing", "📐 Greeks", "🤖 AI Insights", "⚠️ Risk Analysis"
-        ])
-        
-        with tab1:
-            display_summary(qf, pricing, greeks, ml_results)
-        
-        with tab2:
-            display_pricing(pricing, ml_results)
-        
-        with tab3:
-            display_greeks(qf, greeks)
-        
-        with tab4:
-            display_ml_insights(ml_results)
-        
-        with tab5:
-            display_risk_analysis(scenario_results)
-    else:
-        # Welcome screen content
-        st.markdown('')
-        st.markdown('')
-        
-        col1, col2, col3 = st.columns(3)
-        
-        with col1:
-            st.markdown("""
-            <div class="feature-card">
-                <span class="feature-icon">📊</span>
-                <div class="feature-title">Classical Pricing</div>
-                <div style="text-align: left; margin-top: 1rem;">
-                    • Black-Scholes Model<br>
-                    • Binomial Trees<br>
-                    • Monte Carlo Sims<br>
-                    • Ensemble Fair Value
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col2:
-            st.markdown("""
-            <div class="feature-card">
-                <span class="feature-icon">🤖</span>
-                <div class="feature-title">AI Intelligence</div>
-                <div style="text-align: left; margin-top: 1rem;">
-                    • GARCH Volatility<br>
-                    • XGBoost Mispricing<br>
-                    • HMM Regime Detection<br>
-                    • Explainable AI (SHAP)
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col3:
-            st.markdown("""
-            <div class="feature-card">
-                <span class="feature-icon">🛡️</span>
-                <div class="feature-title">Risk Management</div>
-                <div style="text-align: left; margin-top: 1rem;">
-                    • Full Greeks Analysis<br>
-                    • Delta-Neutral Hedging<br>
-                    • Scenario Stress Tests<br>
-                    • VaR / CVaR Metrics
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        st.markdown('')
-        st.info("👈 **Get Started**: Select a company (e.g., NVDA, AAPL) in the sidebar and click **Run Analysis**")
-
-
-def display_summary(qf, pricing, greeks, ml_results):
-    """Display executive summary with onboarding"""
-    st.header(f"📊 {qf.ticker} Executive Summary")
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("#### **Simulation Parameters**")
+    n_ticks = st.sidebar.slider("LOB Tick Horizon", min_value=100, max_value=800, value=300, step=50)
+    sim_seed = st.sidebar.number_input("Random Seed", value=42, step=1)
     
-    # Onboarding hint
-    with st.expander("💡 New to QuantFlow? Start Here", expanded=False):
-        st.markdown("""
-        ### How to Use This Dashboard
-        
-        1. **Fair Value Hook** 🎯: Check if the option is mathematically mispriced
-           - Look at **Mispricing Score** below
-           - 80+ = Strong buy signal
-           
-        2. **Regime Detection** 🌍: Understand the current market environment
-           - Different strategies work in different regimes
-           - We auto-adjust Greeks for current conditions
-           
-        3. **Greeks Sensitivity** 📈: See how your position changes
-           - Use the Greeks tab to visualize risk
-           
-        4. **Stress Test** ⚠️: Know your worst-case scenario
-           - Check VaR in Risk Analysis tab
-           - Never trade more than you can afford to lose
-        """)
-    
-    # Key metrics in columns with tooltips
-    col1, col2, col3, col4 = st.columns(4)
-    
-    # Contract Header
-    st.markdown(f"""
-    <div style="padding: 1rem; background: rgba(255, 255, 255, 0.05); border-radius: 10px; margin-bottom: 2rem; border: 1px solid rgba(255,255,255,0.1);">
-        <h3 style="margin:0; font-size: 1.2rem; color: #aaa;">Contract Details</h3>
-        <div style="display: flex; gap: 2rem; align-items: center; margin-top: 0.5rem;">
-            <div>
-                <span style="font-size: 0.9rem; color: #888;">Ticker</span>
-                <div style="font-size: 1.5rem; font-weight: bold; color: white;">{qf.ticker}</div>
-            </div>
-            <div>
-                 <span style="font-size: 0.9rem; color: #888;">Type</span>
-                 <div style="font-size: 1.5rem; font-weight: bold; color: {'#00FF88' if qf.option_type=='call' else '#FF5555'}; text-transform: uppercase;">
-                    {qf.option_type}
-                 </div>
-            </div>
-             <div>
-                <span style="font-size: 0.9rem; color: #888;">Strike</span>
-                <div style="font-size: 1.5rem; font-weight: bold; color: white;">${qf.K:.2f}</div>
-            </div>
-             <div>
-                <span style="font-size: 0.9rem; color: #888;">Expiry</span>
-                <div style="font-size: 1.5rem; font-weight: bold; color: white;">{qf.expiry}</div>
-            </div>
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("#### **Mormyrid Swarm Setup**")
+    st.sidebar.caption("Biomimetic active electrolocation swarm with Jamming Avoidance Response (JAR).")
+    n_scouts = st.sidebar.slider("Scout Agents (Depth Discovery)", 2, 12, 6)
+    n_predators = st.sidebar.slider("Predator Agents (Hawkes Momentum)", 2, 16, 8)
+    n_schoolers = st.sidebar.slider("Schooler Agents (Mean-Reversion)", 4, 20, 10)
+    n_sentinels = st.sidebar.slider("Sentinel Agents (VPIN Toxicity)", 2, 8, 4)
+
+    # Load data and run pipeline
+    snapshots, raw_df = get_market_simulation_data(ticker=ticker_choice, n_ticks=n_ticks, initial_price=s0, seed=sim_seed)
+    pipeline_df, latest_signal, latest_agents = run_full_swarm_pipeline(snapshots)
+    latest_snap = snapshots[-1]
+
+    # Header section
+    col_h1, col_h2 = st.columns([3, 1])
+    with col_h1:
+        st.markdown('<div class="terminal-title">QUANTFLOW HFT TERMINAL</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="terminal-sub">Institutional Market Microstructure & Biomimetic Mormyrid Swarm Intelligence | <b>{ticker_choice}</b> @ ${latest_snap.mid_price:.2f}</div>',
+            unsafe_allow_html=True
+        )
+    with col_h2:
+        regime = latest_signal.dominant_regime
+        badge_class = (
+            "badge-momentum" if regime == "HAWKES_MOMENTUM"
+            else "badge-toxic" if regime == "TOXIC_DRAIN"
+            else "badge-reversion" if regime == "MEAN_REVERSION"
+            else "badge-stable"
+        )
+        st.markdown(f"""
+        <div style="text-align: right; margin-top: 10px;">
+            <div style="color: #94a3b8; font-size: 0.8rem; margin-bottom: 4px;">ACTIVE MICRO-REGIME</div>
+            <span class="{badge_class}">[{regime}]</span>
         </div>
-    </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
 
-    # Key metrics in columns
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.metric(
-            "Underlying Stock Price",
-            format_currency(qf.S),
-            delta=None,
-            help="Current spot price of the stock"
-        )
-    
-    with col2:
-        bid = qf.market_data['option'].get('bid', 0)
-        ask = qf.market_data['option'].get('ask', 0)
-        
-        # Use Mid Price if available, otherwise Last
-        if bid > 0 and ask > 0:
-            current_price = (bid + ask) / 2
-            price_label = "Mark Price (Mid)"
-        else:
-            current_price = pricing['market_price']
-            price_label = "Last Price"
-            
-        spread_text = f"Bid: {format_currency(bid)} | Ask: {format_currency(ask)}"
-        
-        st.metric(
-            price_label,
-            format_currency(current_price),
-            delta=None,
-            help=f"Mid-point of Bid/Ask Spread. {spread_text}"
-        )
-        st.caption(spread_text)
-    
-    with col3:
-        # Use Forecast Fair Value if available, else Ensemble
-        fair_value = ml_results.get('forecast_fair_value', pricing['ensemble_fair_value'])
-        divergence = ml_results.get('divergence_pct', pricing['divergence_pct'])
-        
-        st.metric(
-             "Forecast Fair Value",
-             format_currency(fair_value),
-             delta=f"{divergence:+.1f}%",
-             delta_color="normal", # Green if positive (Undervalued), Red if negative (Overvalued)
-             help="Fair Value based on AI-Forecasted Volatility, not just current Market IV."
-        )
-    
-    with col4:
-        st.metric(
-            "Market Regime",
-            ml_results['regime']['regime_label'],
-            delta=f"{ml_results['regime']['confidence']*100:.1f}% confidence",
-            help=TOOLTIPS["regime"]
-        )
-    
-    # Mispricing Score Row
-    score_col1, score_col2 = st.columns([1, 1])
-    with score_col1:
-         st.metric(
-            "Mispricing Score",
-            f"{ml_results['mispricing_score']:.0f}/100",
-            delta=ml_results['mispricing_assessment'],
-            help="Based on divergence between Market Price and AI-Forecasted Fair Value."
-        )
-    
-    # Smart Position Sizer
-    st.subheader("🎯 Smart Position Sizer")
+    # Global KPI Row
+    kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
+    with kpi1:
+        st.metric("LOB Mid Price", f"${latest_snap.mid_price:.2f}", f"Spread: ${latest_snap.spread:.2f}")
+    with kpi2:
+        st.metric("Stoikov Micro-Price", f"${latest_snap.micro_price:.2f}", f"Dev: {(latest_snap.micro_price - latest_snap.mid_price)*100:.1f}c")
+    with kpi3:
+        st.metric("Swarm Drift Forecast", f"{latest_signal.predicted_drift_bps:+.2f} bps", f"Conf: {latest_signal.swarm_confidence*100:.0f}%")
+    with kpi4:
+        st.metric("Hawkes Jump Prob", f"{latest_signal.jump_probability*100:.1f}%", f"VPIN: {pipeline_df['vpin'].iloc[-1]:.2f}")
+    with kpi5:
+        st.metric("JAR Crowding Index", f"{latest_signal.market_crowding_index*100:.1f}%", f"Jammed: {latest_signal.jammed_agent_ratio*100:.0f}%")
 
-    # Volatility Reality Check
-    if "Low Vol" in ml_results['regime']['regime_label'] and qf.sigma > 0.4:
-        st.warning(f"⚠️ **Anomaly Detected**: AI detects 'Low Volatility' regime, but Option Implied Volatility is high ({qf.sigma:.1%}). Market might be pricing in an event not yet in historical features.")
-    
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        portfolio_size = st.number_input("Portfolio Size ($)", value=50000, step=1000)
-        risk_pct = st.slider("Max Risk per Trade (%)", 1, 5, 2)
-    
-    with col2:
-        max_risk = portfolio_size * (risk_pct / 100)
-        st.metric("Max Risk Amount", format_currency(max_risk))
-        
-    # Calculate recommended size
-    # Logic: Risk = Amount lost if stop loss hit OR complete loss of premium
-    # Conservative approach: Assume 50% loss of premium is the "Risk" for sizing
-    # Strict Limit: Total invested amount cannot exceed 10% of portfolio
-    
-    # Use Fair value if market price is stale (flagged by model_is_valid)
-    effective_price = pricing['market_price']
-    
-    # Check for stale data warning
-    is_stale = False
-    if hasattr(qf.market_data.get('option'), 'get') and not qf.market_data['option'].get('model_is_valid', True):
-        is_stale = True
-        # If stale, we rely on Ensemble Fair Value as the "Real" price for sizing
-        if pricing['ensemble_fair_value'] > 0:
-            effective_price = pricing['ensemble_fair_value']
-            st.warning(f"⚠ **STALE DATA DETECTED**: Market price is unrealistic (${pricing['market_price']:.2f}). Using Fair Value (${effective_price:.2f}) for sizing.")
-    
-    contract_cost = effective_price * 100
-    
-    if contract_cost > 0:
-        # 1. Risk-based sizing (assuming 100% loss worst case for safety)
-        # contracts_risk = max_risk / (contract_cost) 
-        # But let's assume sophisticated user exits at -50%. So Risk = 0.5 * Cost
-        # Therefore: Max_Risk = N * 0.5 * Cost  =>  N = Max_Risk / (0.5 * Cost)
-        risk_per_contract = contract_cost * 0.5  # Assumes 50% stop loss
-        contracts_by_risk = int(max_risk / risk_per_contract)
-        
-        # 2. Hard Capital Limit (Max 10% of portfolio in one trade)
-        max_capital_allocation = portfolio_size * 0.10
-        contracts_by_capital = int(max_capital_allocation / contract_cost)
-        
-        # Take the stricter limit
-        recommended_contracts = max(0, min(contracts_by_risk, contracts_by_capital))
-        
-        st.success(f"### 💡 Recommendation: {recommended_contracts} contracts")
-        
-        # Cost breakdown
-        total_cost = recommended_contracts * contract_cost
-        pct_portfolio = (total_cost / portfolio_size) * 100
-        
-        st.markdown(f"""
-        - **Total Cost**: {format_currency(total_cost)} ({pct_portfolio:.1f}% of portfolio)
-        - **Max Risk (at 50% stop)**: {format_currency(total_cost * 0.5)}
-        """)
-        
-        if recommended_contracts == 0:
-            st.error("❌ Trade is too expensive for your risk rules. Increase portfolio size or choose cheaper option.")
-        elif pct_portfolio > 10:
-             st.warning(f"⚠️ High Allocation: This trade uses {pct_portfolio:.1f}% of your capital. Proceed with caution.")
-    else:
-        st.error("Invalid option pricing. Cannot calculate position size.")
-    
-    st.divider()
-    
-    # Assessment banner
-    if abs(pricing['divergence_pct']) < 2:
-        st.success("✅ " + pricing['assessment'])
-    elif pricing['divergence_pct'] > 0:
-        st.success("🟢 " + pricing['assessment'])
-    else:
-        st.error("🔴 " + pricing['assessment'])
-    
-    # Quick facts
-    st.subheader("Quick Facts")
-    facts_col1, facts_col2 = st.columns(2)
-    
-    with facts_col1:
-        st.markdown(f"""
-        **Market Data**
-        - Spot Price: ${qf.S:.2f}
-        - Strike: ${qf.K:.2f}
-        - Days to Expiry: {int(qf.T * 365)} days
-        - Implied Volatility: {qf.sigma*100:.2f}%
-        """)
-    
-    with facts_col2:
-        st.markdown(f"""
-        **Key Greeks**
-        - Delta: {greeks['delta']:.4f}
-        - Gamma: {greeks['gamma']:.4f}
-        - Theta: ${greeks['theta_per_day']:.4f}/day
-        - Vega: ${greeks['vega_percent']:.4f}/1% vol
-        """)
+    # Main Tabs Navigation
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "Live LOB & Microstructure",
+        "Mormyrid Swarm Matrix",
+        "Swarm HFT Market Maker",
+        "Algorithmic Backtester",
+        "Options Intelligence & Kernels",
+    ])
 
+    # ==========================================
+    # TAB 1: LIVE LOB & MICROSTRUCTURE DEPTH
+    # ==========================================
+    with tab1:
+        st.markdown("### **Level 2 Limit Order Book Depth & Microstructural Pressure**")
+        
+        col_lob1, col_lob2 = st.columns([3, 2])
+        
+        with col_lob1:
+            # Interactive Level 2 Depth Ladder
+            bids_p = latest_snap.bid_prices[:8]
+            bids_v = latest_snap.bid_volumes[:8]
+            asks_p = latest_snap.ask_prices[:8]
+            asks_v = latest_snap.ask_volumes[:8]
 
-def display_pricing(pricing, ml_results=None):
-    """Display pricing analysis"""
-    # Visual Header
-    if os.path.exists(os.path.join("assets", "pricing.png")):
-        st.image(os.path.join("assets", "pricing.png"), use_container_width=True)
-        
-    st.header("💰 Ensemble Pricing Analysis")
-    
-    # Use Forecast Fair Value if available (Synced with Summary)
-    ensemble_price = pricing['ensemble_fair_value']
-    if ml_results and 'forecast_fair_value' in ml_results:
-        ensemble_price = ml_results['forecast_fair_value']
-    
-    # Model comparison
-    st.subheader("Model Comparison")
-    
-    models_data = {
-        'Model': ['Black-Scholes', 'Binomial (European)', 'Monte Carlo', 'Ensemble'],
-        'Price': [
-            pricing['black_scholes'],
-            pricing['binomial_european'],
-            pricing['monte_carlo'],
-            ensemble_price
-        ]
-    }
-    
-    df_models = pd.DataFrame(models_data)
-    df_models['Difference from Market (%)'] = (
-        (df_models['Price'] - pricing['market_price']) / pricing['market_price'] * 100
-    )
-    
-    st.dataframe(df_models.style.format({
-        'Price': '${:.2f}',
-        'Difference from Market (%)': '{:+.2f}%'
-    }), use_container_width=True)
-    
-    # Price comparison chart
-    fig = go.Figure()
-    
-    fig.add_trace(go.Bar(
-        x=df_models['Model'],
-        y=df_models['Price'],
-        text=df_models['Price'].apply(lambda x: f'${x:.2f}'),
-        textposition='outside',
-        marker_color=['#667eea', '#764ba2', '#f093fb', '#4facfe']
-    ))
-    
-    fig.add_hline(
-        y=pricing['market_price'],
-        line_dash="dash",
-        line_color="red",
-        annotation_text=f"Market: ${pricing['market_price']:.2f}"
-    )
-    
-    fig.update_layout(
-        title="Pricing Model Comparison",
-        xaxis_title="Model",
-        yaxis_title="Price ($)",
-        height=400
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
+            fig_lob = go.Figure()
+            # Bids (Green horizontal bars)
+            fig_lob.add_trace(go.Bar(
+                y=[f"${p:.2f}" for p in bids_p],
+                x=bids_v,
+                orientation='h',
+                name='Bid Depth (Liquidity)',
+                marker=dict(color='rgba(16, 185, 129, 0.75)', line=dict(color='#10b981', width=1)),
+                text=[f"{int(v):,} shs" for v in bids_v],
+                textposition='inside',
+            ))
+            # Asks (Red horizontal bars)
+            fig_lob.add_trace(go.Bar(
+                y=[f"${p:.2f}" for p in asks_p],
+                x=asks_v,
+                orientation='h',
+                name='Ask Depth (Liquidity)',
+                marker=dict(color='rgba(239, 68, 68, 0.75)', line=dict(color='#ef4444', width=1)),
+                text=[f"{int(v):,} shs" for v in asks_v],
+                textposition='inside',
+            ))
 
-
-def display_greeks(qf, greeks):
-    """Display Greeks analysis with enhanced interactivity"""
-    st.header("📐 Greeks Analysis")
-    
-    # Greeks table with better formatting
-    greeks_data = {
-        'Greek': ['Delta', 'Gamma', 'Theta (annual)', 'Theta (per day)', 'Vega', 'Rho'],
-        'Value': [
-            greeks['delta'],
-            greeks['gamma'],
-            greeks['theta'],
-            greeks['theta_per_day'],
-            greeks['vega_percent'],
-            greeks['rho_percent']
-        ],
-        'Interpretation': [
-            f"Option moves ${abs(greeks['delta']*qf.S):.2f} for every $1 stock move",
-            f"Delta changes by {greeks['gamma']:.4f} per $1 stock move",
-            f"Annual time decay: ${greeks['theta']:.2f}",
-            f"Option loses ${abs(greeks['theta_per_day']):.2f} per day",
-            f"Option gains ${greeks['vega_percent']:.2f} per 1% IV increase",
-            f"Option gains ${greeks['rho_percent']:.2f} per 1% rate increase"
-        ]
-    }
-    
-    df_greeks = pd.DataFrame(greeks_data)
-    
-    # Add tooltips column
-    st.dataframe(
-        df_greeks.style.set_properties(**{'text-align': 'left'}),
-        use_container_width=True,
-        hide_index=True
-    )
-    
-    # Greeks vs Spot visualization - ENHANCED
-    st.subheader("📊 Interactive Greeks Sensitivity")
-    
-    # Chart type selector
-    chart_type = st.radio(
-        "Select View:",
-        ["Delta & Gamma", "All Greeks"],
-        horizontal=True,
-        help="Choose which Greeks to visualize"
-    )
-    
-    calc = GreeksCalculator(qf.S, qf.K, qf.T, qf.r, qf.sigma, qf.option_type, qf.q)
-    greeks_vs_spot = calc.greeks_vs_spot(spot_range=(0.8, 1.2), n_points=100)
-    
-    if chart_type == "Delta & Gamma":
-        # Create interactive figure with advanced features
-        fig = go.Figure()
-        
-        # Delta trace with custom hover
-        fig.add_trace(go.Scatter(
-            x=greeks_vs_spot['spot_price'],
-            y=greeks_vs_spot['delta'],
-            name='Delta',
-            line=dict(color='#00FF88', width=3),
-            mode='lines',
-            hovertemplate='<b>Delta</b><br>' +
-                         'Stock: $%{x:.2f}<br>' +
-                         'Delta: %{y:.4f}<br>' +
-                         '<i>Option moves $%{customdata:.2f} per $1 stock move</i><br>' +
-                         '<extra></extra>',
-            customdata=greeks_vs_spot['delta'] * greeks_vs_spot['spot_price']
-        ))
-        
-        # Gamma trace (scaled) with custom hover
-        fig.add_trace(go.Scatter(
-            x=greeks_vs_spot['spot_price'],
-            y=greeks_vs_spot['gamma'] * 10,
-            name='Gamma (×10)',
-            line=dict(color='#FFB020', width=3, dash='dash'),
-            mode='lines',
-            yaxis='y2',
-            hovertemplate='<b>Gamma</b><br>' +
-                         'Stock: $%{x:.2f}<br>' +
-                         'Gamma: %{customdata:.4f}<br>' +
-                         '<i>Delta changes by this amount per $1 stock move</i><br>' +
-                         '<extra></extra>',
-            customdata=greeks_vs_spot['gamma']
-        ))
-        
-        # Current spot price marker
-        fig.add_vline(
-            x=qf.S,
-            line_dash="dot",
-            line_color="#FF004D",
-            line_width=2,
-            annotation_text=f"Current: ${qf.S:.2f}",
-            annotation_position="top"
-        )
-        
-        # Strike price marker
-        fig.add_vline(
-            x=qf.K,
-            line_dash="dot",
-            line_color="#00C8FF",
-            line_width=2,
-            annotation_text=f"Strike: ${qf.K:.2f}",
-            annotation_position="bottom"
-        )
-        
-        # Update layout with advanced features
-        fig.update_layout(
-            title={
-                'text': "Delta & Gamma vs Spot Price",
-                'font': {'size': 20, 'color': '#00FF88'}
-            },
-            xaxis_title="Stock Price ($)",
-            yaxis_title="Delta",
-            yaxis2=dict(
-                title="Gamma (×10)",
-                overlaying='y',
-                side='right',
-                showgrid=False
-            ),
-            height=500,
-            hovermode='x unified',
-            template='plotly_dark',
-            showlegend=True,
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
-            ),
-            # Add range slider
-            xaxis=dict(
-                rangeslider=dict(visible=True, thickness=0.05),
-                type="linear"
+            fig_lob.update_layout(
+                title="Level 2 Order Book Depth Ladder (Top 8 Levels)",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,0.6)",
+                height=380,
+                margin=dict(l=40, r=20, t=50, b=30),
+                barmode='group',
+                xaxis=dict(title="Aggregate Limit Volume (Shares)", gridcolor="rgba(255,255,255,0.05)"),
+                yaxis=dict(title="Price Level", autorange="reversed"),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
             )
+            st.plotly_chart(fig_lob, use_container_width=True)
+
+        with col_lob2:
+            st.markdown("#### **Microstructure Pressure Gauges**")
+            
+            # Multi-level OFI Gauge
+            current_ofi = pipeline_df["ofi"].iloc[-1]
+            fig_ofi = go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=current_ofi,
+                title={'text': "Multi-Level OFI (Order Flow Imbalance)", 'font': {'size': 14, 'color': '#e2e8f0'}},
+                gauge={
+                    'axis': {'range': [-1.0, 1.0], 'tickcolor': "#94a3b8"},
+                    'bar': {'color': "#00F5A0" if current_ofi >= 0 else "#EF4444"},
+                    'steps': [
+                        {'range': [-1.0, -0.4], 'color': "rgba(239, 68, 68, 0.2)"},
+                        {'range': [-0.4, 0.4], 'color': "rgba(100, 116, 139, 0.15)"},
+                        {'range': [0.4, 1.0], 'color': "rgba(16, 185, 129, 0.2)"},
+                    ],
+                    'threshold': {
+                        'line': {'color': "#ffffff", 'width': 3},
+                        'thickness': 0.75,
+                        'value': current_ofi
+                    }
+                }
+            ))
+            fig_ofi.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                height=180,
+                margin=dict(l=20, r=20, t=30, b=10)
+            )
+            st.plotly_chart(fig_ofi, use_container_width=True)
+
+            # VPIN Toxicity Gauge
+            current_vpin = pipeline_df["vpin"].iloc[-1]
+            fig_vpin = go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=current_vpin,
+                title={'text': "VPIN (Probability of Toxicity)", 'font': {'size': 14, 'color': '#e2e8f0'}},
+                gauge={
+                    'axis': {'range': [0.0, 1.0], 'tickcolor': "#94a3b8"},
+                    'bar': {'color': "#F59E0B" if current_vpin > 0.5 else "#3B82F6"},
+                    'steps': [
+                        {'range': [0.0, 0.4], 'color': "rgba(59, 130, 246, 0.2)"},
+                        {'range': [0.4, 0.7], 'color': "rgba(245, 158, 11, 0.2)"},
+                        {'range': [0.7, 1.0], 'color': "rgba(239, 68, 68, 0.3)"},
+                    ],
+                }
+            ))
+            fig_vpin.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                height=180,
+                margin=dict(l=20, r=20, t=30, b=10)
+            )
+            st.plotly_chart(fig_vpin, use_container_width=True)
+
+        # Micro-Price vs Mid-Price Stream
+        st.markdown("#### **High-Frequency Stoikov Micro-Price & Hawkes Intensity Stream**")
+        fig_stream = make_subplots(specs=[[{"secondary_y": True}]])
+        
+        fig_stream.add_trace(
+            go.Scatter(x=pipeline_df["timestamp"], y=pipeline_df["mid_price"], name="Mid Price", line=dict(color="#38bdf8", width=1.5)),
+            secondary_y=False,
+        )
+        fig_stream.add_trace(
+            go.Scatter(x=pipeline_df["timestamp"], y=pipeline_df["micro_price"], name="Stoikov Micro-Price", line=dict(color="#00f5a0", width=1.5, dash="dot")),
+            secondary_y=False,
+        )
+        fig_stream.add_trace(
+            go.Scatter(x=pipeline_df["timestamp"], y=pipeline_df["hawkes_intensity"], name="Hawkes Arrival Intensity", line=dict(color="#f43f5e", width=1.2)),
+            secondary_y=True,
         )
         
-        # Add download button
-        config = {
-            'displayModeBar': True,
-            'displaylogo': False,
-            'modeBarButtonsToAdd': ['drawline', 'drawopenpath', 'eraseshape'],
-            'toImageButtonOptions': {
-                'format': 'png',
-                'filename': 'greeks_delta_gamma',
-                'height': 800,
-                'width': 1200,
-                'scale': 2
-            }
-        }
-        
-        st.plotly_chart(fig, use_container_width=True, config=config)
-        
-        # Interactive insights
-        st.info(f"""
-        💡 **Interactive Features**:
-        - **Hover** over lines to see exact values
-        - **Click and drag** to zoom into specific regions
-        - **Double-click** to reset zoom
-        - **Download** chart using camera icon (top right)
-        - **Range slider** below chart for quick navigation
-        
-        **Current Analysis**:
-        - Delta = {greeks['delta']:.4f} (option moves ${abs(greeks['delta']*qf.S):.2f} per $1 stock move)
-        - Gamma = {greeks['gamma']:.4f} (delta accelerates {"quickly" if greeks['gamma'] > 0.02 else "moderately"})
-        """)
-    
-    elif chart_type == "All Greeks":
-        # Multi-subplot interactive chart
-        from plotly.subplots import make_subplots
-        
-        fig = make_subplots(
-            rows=2, cols=2,
-            subplot_titles=('Delta', 'Gamma', 'Theta (per day)', 'Vega'),
-            vertical_spacing=0.12,
-            horizontal_spacing=0.1
+        fig_stream.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,0.6)",
+            height=300,
+            margin=dict(l=40, r=40, t=20, b=30),
+            xaxis=dict(title="Timestamp (Seconds)", gridcolor="rgba(255,255,255,0.05)"),
+            yaxis=dict(title="Price ($)", gridcolor="rgba(255,255,255,0.05)"),
+            yaxis2=dict(title="Hawkes Intensity", overlaying="y", side="right"),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         )
-        
-        # Delta
-        fig.add_trace(
-            go.Scatter(
-                x=greeks_vs_spot['spot_price'],
-                y=greeks_vs_spot['delta'],
-                name='Delta',
-                line=dict(color='#00FF88', width=2),
-                hovertemplate='$%{x:.2f}: %{y:.4f}<extra></extra>'
-            ),
-            row=1, col=1
+        st.plotly_chart(fig_stream, use_container_width=True)
+
+    # ==========================================
+    # TAB 2: MORMYRID SWARM INTELLIGENCE MATRIX
+    # ==========================================
+    with tab2:
+        st.markdown("### **Biomimetic Mormyrid Swarm Consensus Intelligence**")
+        st.caption(
+            "Inspired by weakly electric fish (Mormyridae) active electrolocation and Jamming Avoidance Response (JAR). "
+            "Agents emit high-frequency probe pulses to resolve murky LOB dynamics, reach decentralized consensus, and detect impending Hawkes jumps."
         )
+
+        col_sw1, col_sw2 = st.columns([3, 2])
         
-        # Gamma
-        fig.add_trace(
-            go.Scatter(
-                x=greeks_vs_spot['spot_price'],
-                y=greeks_vs_spot['gamma'],
-                name='Gamma',
-                line=dict(color='#FFB020', width=2),
-                hovertemplate='$%{x:.2f}: %{y:.4f}<extra></extra>'
-            ),
-            row=1, col=2
-        )
-        
-        # Theta
-        fig.add_trace(
-            go.Scatter(
-                x=greeks_vs_spot['spot_price'],
-                y=greeks_vs_spot['theta_per_day'],
-                name='Theta',
-                line=dict(color='#FF6B6B', width=2),
-                hovertemplate='$%{x:.2f}: $%{y:.2f}/day<extra></extra>'
-            ),
-            row=2, col=1
-        )
-        
-        # Vega
-        fig.add_trace(
-            go.Scatter(
-                x=greeks_vs_spot['spot_price'],
-                y=greeks_vs_spot['vega_percent'],
-                name='Vega',
-                line=dict(color='#00C8FF', width=2),
-                hovertemplate='$%{x:.2f}: $%{y:.2f}/1%vol<extra></extra>'
-            ),
-            row=2, col=2
-        )
-        
-        # Add current spot markers to all
-        for row in [1, 2]:
-            for col in [1, 2]:
-                fig.add_vline(
-                    x=qf.S,
-                    line_dash="dot",
-                    line_color="#FF004D",
-                    row=row, col=col
+        with col_sw1:
+            # 2D/3D Feature Space Scatter of Fish Agents
+            if latest_agents:
+                agent_df = pd.DataFrame([
+                    {
+                        "Agent ID": a.agent_id,
+                        "Role": a.role.value.upper(),
+                        "OFI Perception (X)": a.position[0],
+                        "VPIN Perception (Y)": a.position[1],
+                        "Hawkes Perception (Z)": a.position[2],
+                        "EOD Frequency (Hz)": a.eod_frequency,
+                        "Fitness": a.perceived_fitness,
+                        "Confidence": a.confidence,
+                        "Jammed Status": "JAMMED (JAR Active)" if a.is_jammed else "SYNCHRONIZED",
+                    }
+                    for a in latest_agents
+                ])
+
+                role_color_map = {
+                    "SCOUT": "#38BDF8",      # Light Blue
+                    "PREDATOR": "#EF4444",   # Red
+                    "SCHOOLER": "#10B981",   # Green
+                    "SENTINEL": "#F59E0B",   # Amber
+                }
+
+                fig_agents = px.scatter(
+                    agent_df,
+                    x="OFI Perception (X)",
+                    y="VPIN Perception (Y)",
+                    color="Role",
+                    size="Confidence",
+                    hover_data=["Agent ID", "EOD Frequency (Hz)", "Fitness", "Jammed Status"],
+                    color_discrete_map=role_color_map,
+                    title="Active Electrolocation Swarm Field (LOB Feature Space)",
                 )
-        
-        fig.update_layout(
-            height=700,
-            template='plotly_dark',
-            showlegend=False,
-            hovermode='x unified'
+                
+                # Add market true state marker
+                fig_agents.add_trace(go.Scatter(
+                    x=[pipeline_df["ofi"].iloc[-1]],
+                    y=[pipeline_df["vpin"].iloc[-1]],
+                    mode="markers+text",
+                    name="True Market State",
+                    text=["[Market State]"],
+                    textposition="top center",
+                    marker=dict(size=16, color="#ffffff", symbol="star", line=dict(color="#00F5A0", width=2))
+                ))
+
+                fig_agents.update_layout(
+                    template="plotly_dark",
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(15,23,42,0.6)",
+                    height=420,
+                    margin=dict(l=40, r=20, t=50, b=30),
+                    xaxis=dict(title="Order Flow Imbalance Subspace (OFI)", gridcolor="rgba(255,255,255,0.05)"),
+                    yaxis=dict(title="Toxicity Subspace (VPIN)", gridcolor="rgba(255,255,255,0.05)"),
+                )
+                st.plotly_chart(fig_agents, use_container_width=True)
+
+        with col_sw2:
+            st.markdown("#### **Swarm Telemetry & Consensus Voting**")
+            
+            # Role contribution bar chart
+            role_contribs = latest_signal.role_contributions
+            fig_roles = go.Figure(go.Bar(
+                x=list(role_contribs.keys()),
+                y=list(role_contribs.values()),
+                marker_color=["#38BDF8", "#EF4444", "#10B981", "#F59E0B"],
+            ))
+            fig_roles.update_layout(
+                title="Decentralized Role Signal Contributions",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,0.6)",
+                height=200,
+                margin=dict(l=20, r=20, t=40, b=20),
+                yaxis=dict(title="Signal Bias", gridcolor="rgba(255,255,255,0.05)"),
+            )
+            st.plotly_chart(fig_roles, use_container_width=True)
+
+            # Jamming Avoidance Radar / Breakdown
+            st.markdown("""
+            <div style="background: rgba(15,23,42,0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 12px; font-size: 0.9rem;">
+                <b>Biological Jamming Avoidance (JAR) Status:</b><br>
+                - Frequency Band: 40 Hz - 180 Hz<br>
+                - Active Desynchronization: Repulsive force applied to crowded queues.<br>
+                - Adverse Selection Protection: Anti-herd slippage mitigation active.<br>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # Swarm Consensus Historical Drift Forecast
+        fig_drift = go.Figure()
+        fig_drift.add_trace(go.Scatter(
+            x=pipeline_df["timestamp"],
+            y=pipeline_df["drift_bps"],
+            name="Swarm Drift Forecast (bps)",
+            line=dict(color="#00F5A0", width=2),
+            fill='tozeroy',
+            fillcolor='rgba(0, 245, 160, 0.1)'
+        ))
+        fig_drift.add_trace(go.Scatter(
+            x=pipeline_df["timestamp"],
+            y=pipeline_df["jump_prob"] * 30.0,
+            name="Jump Risk Index (Scaled)",
+            line=dict(color="#EF4444", width=1.5, dash="dash")
+        ))
+        fig_drift.update_layout(
+            title="Continuous Swarm Drift Forecast & Hawkes Jump Probability",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,0.6)",
+            height=250,
+            margin=dict(l=40, r=20, t=40, b=30),
+            xaxis=dict(title="Timestamp (Seconds)", gridcolor="rgba(255,255,255,0.05)"),
+            yaxis=dict(title="Predicted Drift (bps)", gridcolor="rgba(255,255,255,0.05)"),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         )
-        
-        config = {
-            'displayModeBar': True,
-            'displaylogo': False,
-            'toImageButtonOptions': {
-                'format': 'png',
-                'filename': 'greeks_all',
-                'height': 900,
-                'width': 1400,
-                'scale': 2
-            }
-        }
-        
-        st.plotly_chart(fig, use_container_width=True, config=config)
-    
-    # Hedging recommendation
-    st.subheader("🛡️ Delta-Neutral Hedging Strategy")
-    
-    hedge = calc.delta_neutral_hedge()
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown(f"""
-        **Recommended Hedge**:
-        {hedge['recommendation']}
-        
-        **Hedge Details**:
-        - Shares to hedge: {abs(hedge['hedge_position']):.0f}
-        - Direction: {"SHORT" if hedge['hedge_position'] < 0 else "LONG"}
-        - Notional: ${abs(hedge['hedge_notional']):,.0f}
-        """)
-    
-    with col2:
-        st.markdown(f"""
-        **Rebalancing**:
-        - Trigger: Spot moves >{hedge['rehedge_threshold_pct']:.1f}%
-        - Threshold price: ${hedge['rehedge_threshold_price']:.2f}
-        - Transaction cost: ${hedge['transaction_cost']:.2f} per rehedge
-        """)
-    
-def display_ml_insights(ml_results):
-    """Display ML insights"""
-    # Visual Header
-    if os.path.exists(os.path.join("assets", "brain.png")):
-        st.image(os.path.join("assets", "brain.png"), use_container_width=True)
-        
-    st.header("🤖 AI-Powered Insights")
-    
-    # Regime detection
-    st.subheader("Market Regime Detection")
-    regime = ml_results['regime']
-    
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        st.markdown(f"**Current Regime:** {regime['regime_label']}")
-        st.markdown(f"**Confidence:** {regime['confidence']*100:.1f}%")
-        
-        # Regime probabilities
-        probs_df = pd.DataFrame({
-            'Regime': list(regime['state_probabilities'].keys()),
-            'Probability': list(regime['state_probabilities'].values())
-        })
-        
-        fig = px.bar(probs_df, x='Regime', y='Probability', 
-                    title='Regime Probabilities',
-                    color='Probability',
-                    color_continuous_scale='Viridis')
-        st.plotly_chart(fig, use_container_width=True)
-    
-    with col2:
-        st.markdown("**Adjusted Greeks:**")
-        adjusted = ml_results['adjusted_greeks']
-        st.markdown(f"- Delta: {adjusted['delta']:.4f}")
-        st.markdown(f"- Range: [{adjusted['delta_lower']:.4f}, {adjusted['delta_upper']:.4f}]")
-        st.markdown(f"- Gamma: {adjusted['gamma']:.4f}")
-        
-        st.info(adjusted['recommendation'])
-    
-    # Volatility forecast
-    st.subheader("Volatility Forecast")
-    vol_forecast = ml_results['volatility_forecast']
-    
-    vol_data = {
-        'Model': ['Historical (20d)', 'GARCH', 'Ensemble'],
-        'Forecast (%)': [
-            vol_forecast.get('historical_20d', 0) * 100,
-            vol_forecast.get('garch', 0) * 100,
-            vol_forecast.get('ensemble', 0) * 100
-        ]
-    }
-    
-    df_vol = pd.DataFrame(vol_data)
-    
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        x=df_vol['Model'],
-        y=df_vol['Forecast (%)'],
-        text=df_vol['Forecast (%)'].apply(lambda x: f'{x:.2f}%'),
-        textposition='outside',
-        marker_color=['#4facfe', '#00f2fe', '#43e97b']
-    ))
-    
-    fig.update_layout(
-        title="Volatility Forecasts",
-        xaxis_title="Model",
-        yaxis_title="Volatility (%)",
-        height=350
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig_drift, use_container_width=True)
 
+    # ==========================================
+    # TAB 3: SWARM HFT MARKET MAKING
+    # ==========================================
+    with tab3:
+        st.markdown("### **Swarm-Skewed Avellaneda-Stoikov High-Frequency Market Maker**")
+        st.caption(
+            "Optimal quotes derived by modulating classical inventory risk aversion with real-time Mormyrid Swarm consensus drift and JAR spread widening."
+        )
 
-def display_risk_analysis(scenario_results):
-    """Display risk analysis with enhanced interactivity"""
-    # Visual Header
-    if os.path.exists(os.path.join("assets", "shield.png")):
-        st.image(os.path.join("assets", "shield.png"), use_container_width=True)
+        col_mm1, col_mm2 = st.columns([1, 2])
         
-    st.header("⚠️ Risk Analysis & Scenarios")
-    
-    # Initialize lock state
-    if 'risk_unlocked' not in st.session_state:
-        st.session_state.risk_unlocked = False
-        
-    # Lock Mechanism
-    if not st.session_state.risk_unlocked:
-        st.markdown("""
-        <div style="
-            background: rgba(255, 60, 60, 0.1); 
-            border: 1px solid rgba(255, 60, 60, 0.3);
-            border-radius: 15px;
-            padding: 2rem;
-            text-align: center;
-            margin-bottom: 2rem;
-            backdrop-filter: blur(10px);
-        ">
-            <h3 style="color: #FF6B6B; margin-top: 0;">🔒 CLASSIFIED RISK PROTOCOLS</h3>
-            <p style="color: #ccc;">Advanced risk mitigation strategies are encrypted for unauthorized personnel.</p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        col1, col2, col3 = st.columns([1, 1, 1])
-        with col2:
-            if st.button("🔓 AUTHENTICATE & DECRYPT", type="primary", use_container_width=True):
-                st.session_state.risk_unlocked = True
-                st.rerun()
-        return  # Stop rendering if locked
-        
-    # Unlocked Content
-    if st.button("🔒 Re-Lock Protocols", type="secondary"):
-        st.session_state.risk_unlocked = False
-        st.rerun()
-        
-    st.success("✅ **ACCESS GRANTED**: displaying classified risk scenarios.")
-    
-    # Scenario comparison
-    st.subheader("📊 Scenario Analysis")
-    scenarios = scenario_results['scenarios']
-    
-    # Interactive scenario selector
-    selected_scenario = st.selectbox(
-        "Click to view scenario details:",
-        scenarios['scenario_name'].tolist(),
-        help="Select a scenario to see detailed breakdown"
-    )
-    
-    # Create interactive bar chart
-    fig = go.Figure()
-    
-    colors = ['#22c55e', '#84cc16', '#9ca3af', '#fb923c', '#ef4444', '#7f1d1d']
-    
-    fig.add_trace(go.Bar(
-        y=scenarios['scenario_name'],
-        x=scenarios['total_pnl'],
-        orientation='h',
-        marker=dict(
-            color=colors,
-            line=dict(color='rgba(255,255,255,0.3)', width=2)
-        ),
-        text=scenarios['total_pnl'].apply(lambda x: f'${x:.0f}'),
-        textposition='outside',
-        hovertemplate='<b>%{y}</b><br>' +
-                     'P&L: $%{x:,.0f}<br>' +
-                     '<i>Click bar for details</i><br>' +
-                     '<extra></extra>'
-    ))
-    
-    fig.add_vline(x=0, line_color='white', line_width=2)
-    
-    fig.update_layout(
-        title={
-            'text': "30-Day Scenario P&L (Click bars for details)",
-            'font': {'size': 18, 'color': '#00FF88'}
-        },
-        xaxis_title="P&L ($)",
-        yaxis_title="",
-        height=400,
-        template='plotly_dark',
-        hovermode='closest'
-    )
-    
-    config = {
-        'displayModeBar': True,
-        'displaylogo': False,
-        'toImageButtonOptions': {
-            'format': 'png',
-            'filename': 'scenario_analysis',
-            'height': 600,
-            'width': 1000,
-            'scale': 2
-        }
-    }
-    
-    st.plotly_chart(fig, use_container_width=True, config=config)
-    
-    # Show selected scenario details
-    selected_data = scenarios[scenarios['scenario_name'] == selected_scenario].iloc[0]
-    
-    with st.container():
-        st.markdown(f"""
-        <div class="glass-card">
-            <h3>📋 {selected_scenario} Scenario Details</h3>
-            <p><strong>Market Conditions</strong>:<br>
-            • Stock Price Change: {selected_data.get('stock_change_pct', 0):.1f}%<br>
-            • Volatility Change: {selected_data.get('vol_change_pct', 0):.1f}%</p>
-            <p><strong>Position Impact</strong>:<br>
-            • Total P&L: <strong>${selected_data['total_pnl']:,.0f}</strong></p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    
-    # Monte Carlo metrics - ENHANCED
-    st.subheader("🎲 Monte Carlo Risk Metrics (10,000 Simulations)")
-    mc_dist = scenario_results['monte_carlo_distribution']
-    
+        with col_mm1:
+            st.markdown("#### **Market Maker Parameters**")
+            gamma = st.slider("Inventory Risk Aversion (gamma)", 0.01, 1.0, 0.15, 0.01)
+            kappa = st.slider("Order Arrival Liquidity (kappa)", 0.5, 5.0, 1.8, 0.1)
+            curr_inv = st.slider("Current Inventory (q)", -50, 50, 0, 5)
+            swarm_mult = st.slider("Swarm Skew Multiplier", 0.0, 3.0, 1.5, 0.1)
 
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.metric("Expected P&L", format_currency(mc_dist['mean_pnl']))
-        st.metric("VaR (95%)", format_currency(mc_dist['var_95']), help=TOOLTIPS["var"])
-    
-    with col2:
-        st.metric("VaR (99%)", format_currency(mc_dist['var_99']), help="Worst loss in 99% of scenarios")
-        st.metric("CVaR (95%)", format_currency(mc_dist['cvar_95']), help=TOOLTIPS["cvar"])
-    
-    with col3:
-        st.metric("Probability of Profit", f"{mc_dist['prob_profit']*100:.1f}%")
-        st.metric("Std Deviation", format_currency(mc_dist['std_pnl']))
-    
-    # Enhanced P&L distribution with click interaction
-    st.subheader("📈 Interactive P&L Distribution")
-    
-    pnl_data = mc_dist['all_pnl']
-    
-    # Create histogram with KDE overlay
-    fig_dist = go.Figure()
-    
-    # Histogram
-    fig_dist.add_trace(go.Histogram(
-        x=pnl_data,
-        nbinsx=60,
-        name='P&L Distribution',
-        marker=dict(
-            color='#3b82f6',
-            line=dict(color='rgba(255,255,255,0.3)', width=1)
-        ),
-        opacity=0.8,
-        hovertemplate='P&L Range: $%{x:,.0f}<br>' +
-                     'Frequency: %{y}<br>' +
-                     '<extra></extra>'
-    ))
-    
-    # Add VaR lines with annotations
-    fig_dist.add_vline(
-        x=mc_dist['var_95'],
-        line_dash='dash',
-        line_color='#FFB020',
-        line_width=3,
-        annotation_text=f"VaR 95%: ${mc_dist['var_95']:,.0f}",
-        annotation_position="top left"
-    )
-    
-    fig_dist.add_vline(
-        x=mc_dist['var_99'],
-        line_dash='dash',
-        line_color='#FF004D',
-        line_width=3,
-        annotation_text=f"VaR 99%: ${mc_dist['var_99']:,.0f}",
-        annotation_position="top left"
-    )
-    
-    fig_dist.add_vline(x=0, line_color='white', line_width=2, annotation_text="Break-even")
-    
-    fig_dist.update_layout(
-        title={'text': "P&L Distribution", 'font': {'size': 18, 'color': '#00FF88'}},
-        xaxis_title="P&L ($)",
-        yaxis_title="Frequency",
-        height=500,
-        template='plotly_dark'
-    )
-    
-    st.plotly_chart(fig_dist, use_container_width=True)
-    
-    # Tail risk explorer
-    with st.expander("🔍 Explore Tail Events (Click to expand)", expanded=False):
-        selected_percentile = st.slider("Explore Percentile", 1, 99, 5)
-        percentile_value = np.percentile(pnl_data, selected_percentile)
-        st.info(f"**{selected_percentile}th Percentile**: ${percentile_value:,.0f}")
+            as_model = SwarmAvellanedaStoikov(
+                gamma=gamma,
+                kappa=kappa,
+                sigma=0.35,
+                swarm_skew_multiplier=swarm_mult,
+            )
 
+            quotes = as_model.calculate_quotes(
+                mid_price=latest_snap.mid_price,
+                inventory=curr_inv,
+                time_remaining=0.5,
+                swarm_drift_bps=latest_signal.predicted_drift_bps,
+                jar_crowding_index=latest_signal.market_crowding_index,
+                adverse_selection_risk=latest_signal.adverse_selection_risk,
+                hawkes_intensity=pipeline_df["hawkes_intensity"].iloc[-1],
+            )
+
+        with col_mm2:
+            st.markdown("#### **Live Quote Ladder & Reservation Price**")
+            
+            # Metrics
+            q_col1, q_col2, q_col3 = st.columns(3)
+            with q_col1:
+                st.metric("Optimal Bid Quote", f"${quotes.bid_price:.2f}", f"P(Fill): {quotes.bid_fill_probability*100:.1f}%")
+            with q_col2:
+                st.metric("Reservation Price r(s,q,t)", f"${quotes.reservation_price:.2f}", f"Skew: {quotes.swarm_skew_bps:+.1f} bps")
+            with q_col3:
+                st.metric("Optimal Ask Quote", f"${quotes.ask_price:.2f}", f"P(Fill): {quotes.ask_fill_probability*100:.1f}%")
+
+            # Quote Ladder Visualization
+            fig_ladder = go.Figure()
+            
+            # Mid price reference line
+            fig_ladder.add_vline(x=quotes.mid_price, line_width=2, line_dash="dash", line_color="#94a3b8", annotation_text="Mid")
+            fig_ladder.add_vline(x=quotes.reservation_price, line_width=2, line_color="#7B61FF", annotation_text="Reservation")
+
+            fig_ladder.add_trace(go.Bar(
+                name="Bid Quote Offset",
+                y=["Market Maker Quotes"],
+                x=[quotes.mid_price - quotes.bid_price],
+                base=quotes.bid_price,
+                orientation='h',
+                marker_color='rgba(16, 185, 129, 0.8)',
+                text=[f"Bid: ${quotes.bid_price:.2f}"],
+                textposition='inside',
+            ))
+            fig_ladder.add_trace(go.Bar(
+                name="Ask Quote Offset",
+                y=["Market Maker Quotes"],
+                x=[quotes.ask_price - quotes.mid_price],
+                base=quotes.mid_price,
+                orientation='h',
+                marker_color='rgba(239, 68, 68, 0.8)',
+                text=[f"Ask: ${quotes.ask_price:.2f}"],
+                textposition='inside',
+            ))
+
+            fig_ladder.update_layout(
+                title="Dynamic Bid / Ask Spread Asymmetry",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,0.6)",
+                height=180,
+                margin=dict(l=40, r=40, t=40, b=20),
+                xaxis=dict(title="Price ($)", range=[quotes.bid_price - 0.1, quotes.ask_price + 0.1]),
+                barmode='overlay',
+            )
+            st.plotly_chart(fig_ladder, use_container_width=True)
+
+            # Fill Probability Surface
+            offsets = np.linspace(0.01, 0.15, 30)
+            p_fills = np.exp(-kappa * (offsets / quotes.mid_price) * 100)
+            
+            fig_fill = go.Figure()
+            fig_fill.add_trace(go.Scatter(
+                x=offsets * 100,
+                y=p_fills * 100,
+                mode='lines+markers',
+                line=dict(color="#38BDF8", width=2),
+                name="Fill Probability vs Spread Offset"
+            ))
+            fig_fill.update_layout(
+                title="Arrival Fill Probability Decay vs Distance from Mid (cents)",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,0.6)",
+                height=200,
+                margin=dict(l=40, r=20, t=40, b=30),
+                xaxis=dict(title="Offset from Mid (cents)", gridcolor="rgba(255,255,255,0.05)"),
+                yaxis=dict(title="Probability (%)", gridcolor="rgba(255,255,255,0.05)"),
+            )
+            st.plotly_chart(fig_fill, use_container_width=True)
+
+    # ==========================================
+    # TAB 4: ALGORITHMIC BACKTESTER
+    # ==========================================
+    with tab4:
+        st.markdown("### **Event-Driven High-Frequency Strategy Backtesting & Telemetry**")
+        
+        sim_harness = HFTSimulator(initial_cash=100000.0)
+        
+        col_bt_btn, col_bt_info = st.columns([1, 3])
+        with col_bt_btn:
+            run_bt = st.button("Run Comparative Backtest", type="primary", use_container_width=True)
+
+        # Run 3 strategies: Swarm AS, Classical AS, Momentum Predator
+        res_swarm = sim_harness.run_simulation(snapshots, strategy_type="swarm_as", as_model=as_model)
+        res_class = sim_harness.run_simulation(snapshots, strategy_type="classical_as", as_model=as_model)
+        res_momen = sim_harness.run_simulation(snapshots, strategy_type="momentum_predator")
+
+        # Comparative KPI Cards
+        b1, b2, b3, b4 = st.columns(4)
+        with b1:
+            st.metric("Swarm AS PnL", f"${res_swarm.total_pnl:,.2f}", f"Sharpe: {res_swarm.sharpe_ratio:.2f}")
+        with b2:
+            st.metric("Classical AS PnL", f"${res_class.total_pnl:,.2f}", f"Sharpe: {res_class.sharpe_ratio:.2f}")
+        with b3:
+            st.metric("Momentum Predator PnL", f"${res_momen.total_pnl:,.2f}", f"Sharpe: {res_momen.sharpe_ratio:.2f}")
+        with b4:
+            st.metric("Swarm Max Drawdown", f"${res_swarm.max_drawdown:,.2f}", f"Win Rate: {res_swarm.win_rate*100:.1f}%")
+
+        # Cumulative PnL Comparison Chart
+        fig_pnl = go.Figure()
+        fig_pnl.add_trace(go.Scatter(
+            x=list(range(len(res_swarm.pnl_series))),
+            y=res_swarm.pnl_series,
+            name="Swarm-Skewed AS Market Maker",
+            line=dict(color="#00F5A0", width=2.5)
+        ))
+        fig_pnl.add_trace(go.Scatter(
+            x=list(range(len(res_class.pnl_series))),
+            y=res_class.pnl_series,
+            name="Classical Avellaneda-Stoikov",
+            line=dict(color="#94A3B8", width=1.5, dash="dash")
+        ))
+        fig_pnl.add_trace(go.Scatter(
+            x=list(range(len(res_momen.pnl_series))),
+            y=res_momen.pnl_series,
+            name="Hawkes Momentum Predator",
+            line=dict(color="#F43F5E", width=1.5, dash="dot")
+        ))
+
+        fig_pnl.update_layout(
+            title="Cumulative Mark-to-Market PnL Progression ($)",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,0.6)",
+            height=360,
+            margin=dict(l=40, r=20, t=50, b=30),
+            xaxis=dict(title="Event Tick Index", gridcolor="rgba(255,255,255,0.05)"),
+            yaxis=dict(title="Cumulative PnL ($)", gridcolor="rgba(255,255,255,0.05)"),
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        )
+        st.plotly_chart(fig_pnl, use_container_width=True)
+
+        # Inventory Path & Fills
+        col_inv, col_fill = st.columns([1, 1])
+        with col_inv:
+            fig_inv = go.Figure()
+            fig_inv.add_trace(go.Scatter(
+                x=list(range(len(res_swarm.inventory_series))),
+                y=res_swarm.inventory_series,
+                name="Swarm AS Inventory",
+                line=dict(color="#38BDF8", width=1.5),
+                fill='tozeroy',
+                fillcolor='rgba(56, 189, 248, 0.1)'
+            ))
+            fig_inv.update_layout(
+                title="Market Maker Inventory Path (Shares)",
+                template="plotly_dark",
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15,23,42,0.6)",
+                height=220,
+                margin=dict(l=40, r=20, t=40, b=20),
+                yaxis=dict(title="Inventory (q)", gridcolor="rgba(255,255,255,0.05)"),
+            )
+            st.plotly_chart(fig_inv, use_container_width=True)
+
+        with col_fill:
+            st.markdown("#### **Recent Simulated Fills**")
+            if not res_swarm.fill_log.empty:
+                st.dataframe(res_swarm.fill_log.tail(8), use_container_width=True, height=180)
+            else:
+                st.info("No fills recorded yet.")
+
+    # ==========================================
+    # TAB 5: OPTIONS INTELLIGENCE & NATIVE ENGINES
+    # ==========================================
+    with tab5:
+        st.markdown("### **Options Pricing Suite & Native Kernels**")
+        
+        c_opt1, c_opt2, c_opt3 = st.columns(3)
+        with c_opt1:
+            opt_strike = st.number_input("Strike Price ($)", value=s0, step=1.0)
+        with c_opt2:
+            opt_days = st.slider("Days to Expiry", 5, 180, 45)
+            opt_t = opt_days / 365.0
+        with c_opt3:
+            opt_vol = st.slider("Implied Volatility (sigma)", 0.10, 1.20, 0.35, 0.05)
+
+        # Calculate Option Pricing Models
+        bs = BlackScholesModel(S=latest_snap.mid_price, K=opt_strike, T=opt_t, r=0.05, sigma=opt_vol)
+        bin_model = BinomialTreeModel(S=latest_snap.mid_price, K=opt_strike, T=opt_t, r=0.05, sigma=opt_vol, steps=50)
+        mc_model = MonteCarloSimulation(S=latest_snap.mid_price, K=opt_strike, T=opt_t, r=0.05, sigma=opt_vol, n_simulations=10000)
+
+        bs_call = bs.price('call')
+        bs_put = bs.price('put')
+        bin_call = bin_model.price('call')
+        mc_call = mc_model.price('call')['price']
+
+        ensemble_call = (bs_call + bin_call + mc_call) / 3.0
+
+        p_col1, p_col2, p_col3, p_col4 = st.columns(4)
+        with p_col1:
+            st.metric("Ensemble Fair Value (Call)", f"${ensemble_call:.2f}")
+        with p_col2:
+            st.metric("Black-Scholes Call", f"${bs_call:.2f}")
+        with p_col3:
+            st.metric("Binomial Tree Call", f"${bin_call:.2f}")
+        with p_col4:
+            st.metric("Monte Carlo Call", f"${mc_call:.2f}")
+
+        # Greeks Section
+        st.markdown("#### **First & Second Order Greeks Sensitivity**")
+        greeks = bs.all_greeks('call')
+        
+        g1, g2, g3, g4, g5 = st.columns(5)
+        with g1:
+            st.metric("Delta", f"{greeks['delta']:.3f}")
+        with g2:
+            st.metric("Gamma", f"{greeks['gamma']:.4f}")
+        with g3:
+            st.metric("Theta", f"${greeks['theta']:.3f}/day")
+        with g4:
+            st.metric("Vega", f"${greeks['vega']:.3f}/1% vol")
+        with g5:
+            st.metric("Rho", f"${greeks['rho']:.3f}/1% rate")
+
+        # Almgren-Chriss Optimal Liquidation Trajectory
+        st.markdown("#### **Almgren-Chriss Optimal Liquidation Curve**")
+        ac_exec = AlmgrenChrissExecution(total_shares=10000.0, time_horizon=1.0, num_intervals=15, volatility=opt_vol, initial_price=latest_snap.mid_price)
+        traj = ac_exec.calculate_trajectory()
+
+        fig_ac = go.Figure()
+        fig_ac.add_trace(go.Scatter(
+            x=traj.times * 60,
+            y=traj.holdings,
+            mode='lines+markers',
+            name="Optimal Inventory Liquidation",
+            line=dict(color="#00F5A0", width=2.5)
+        ))
+        fig_ac.update_layout(
+            title="Optimal Risk-Averse Liquidation Schedule (Shares vs Time)",
+            template="plotly_dark",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15,23,42,0.6)",
+            height=260,
+            margin=dict(l=40, r=20, t=40, b=30),
+            xaxis=dict(title="Execution Time (Minutes)", gridcolor="rgba(255,255,255,0.05)"),
+            yaxis=dict(title="Remaining Holdings (Shares)", gridcolor="rgba(255,255,255,0.05)"),
+        )
+        st.plotly_chart(fig_ac, use_container_width=True)
 
 
 if __name__ == "__main__":

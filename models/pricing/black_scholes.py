@@ -376,6 +376,21 @@ class BlackScholesModel:
                 f"r={self.r:.4f}, σ={self.sigma:.4f}, q={self.q:.4f})")
 
 
+def black_scholes(S: float, K: float, T: float, r: float, sigma: float, option_type: str = 'call', q: float = 0.0) -> float:
+    """Functional interface for Black-Scholes pricing"""
+    if K <= 0 or S <= 0 or T < 0 or sigma < 0:
+        raise ValueError("Inputs S, K, T, sigma must be non-negative (S, K strictly positive)")
+    if option_type.lower() not in ['call', 'put']:
+        raise ValueError("option_type must be 'call' or 'put'")
+    if T == 0 or sigma == 0:
+        if option_type.lower() == 'call':
+            return max(0.0, S - K)
+        else:
+            return max(0.0, K - S)
+    model = BlackScholesModel(S=S, K=K, T=T, r=r, sigma=sigma, q=q)
+    return model.price(option_type)
+
+
 if __name__ == "__main__":
     # Test Black-Scholes model
     bs = BlackScholesModel(S=100, K=105, T=0.25, r=0.05, sigma=0.30)
