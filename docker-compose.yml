@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  terminal:
+    build: .
+    container_name: quantflow_terminal
+    ports:
+      - "8501:8501"
+    environment:
+      - MARKETSTACK_API_KEY=${MARKETSTACK_API_KEY:-24b40dae0167960b6bd3ec0ce5dfd4f9}
+      - ALPHAVANTAGE_API_KEY=${ALPHAVANTAGE_API_KEY:-IHY8ODEW8OI8X34S}
+      - FINAGE_API_KEY=${FINAGE_API_KEY:-API_KEY21M47UC168QB5XHKN884QA37EFA8JUOE}
+    volumes:
+      - ./data/cache:/app/data/cache
+      - ./outputs:/app/outputs
+    restart: unless-stopped
+
+  benchmark:
+    build: .
+    container_name: quantflow_benchmark
+    command: ["python", "tests/benchmark_latency.py"]
+    profiles:
+      - benchmark
+
+  simulation:
+    build: .
+    container_name: quantflow_simulation
+    command: ["python", "main.py"]
+    profiles:
+      - simulation

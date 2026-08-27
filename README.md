@@ -2,13 +2,15 @@
 
 [![CI](https://github.com/planksconstant-arch/Quantflow/actions/workflows/ci.yml/badge.svg)](https://github.com/planksconstant-arch/Quantflow/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/planksconstant-arch/Quantflow/branch/main/graph/badge.svg)](https://codecov.io/gh/planksconstant-arch/Quantflow)
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
+![Docker](https://img.shields.io/badge/docker-ready-blue)
+![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)
 ![HFT Latency](https://img.shields.io/badge/order_match-2.9us-brightgreen)
 
 ## Executive Summary
 
-**QuantFlow** is an institutional-grade quantitative high-frequency trading (HFT), market microstructure intelligence, and options analytics platform. It introduces **Biomimetic Mormyrid Swarm Consensus Intelligence**—a multi-agent framework inspired by weakly electric fish (Mormyridae) active electrolocation, Jamming Avoidance Response (JAR), and decentralized Byzantine-resilient consensus—integrated with real-time Level 2/3 Limit Order Book (LOB) matching and Swarm-Skewed Avellaneda-Stoikov market making.
+**QuantFlow** is an institutional-grade quantitative high-frequency trading (HFT), market microstructure intelligence, and options analytics platform. It introduces **Biomimetic Mormyrid Swarm Consensus Intelligence**—a multi-agent framework inspired by weakly electric fish (Mormyridae) active electrolocation, Jamming Avoidance Response (JAR), and decentralized Byzantine-resilient consensus—integrated with real-time Level 2/3 Limit Order Book (LOB) matching, multi-feed market data routing (Finage HFT, Alpha Vantage, Marketstack, Binance, Yahoo Finance), and Swarm-Skewed Avellaneda-Stoikov market making.
 
 ---
 
@@ -77,31 +79,50 @@ Mormyrid weakly electric fish navigate murky waters by emitting **Electric Organ
 
 ## Quick Start
 
-### 1. Launch Institutional Trading Terminal
+### 1. Local Installation
+
 ```bash
-# Run interactive Streamlit terminal
-streamlit run app.py
+# Clone the repository
+git clone https://github.com/planksconstant-arch/Quantflow.git
+cd Quantflow
+
+# Create and activate virtual environment
+python -m venv .venv
+source .venv/bin/activate  # Linux/macOS
+# On Windows: .venv\Scripts\Activate.ps1
+
+# Install pinned dependencies
+pip install -r requirements.txt
 ```
 
-### 2. Run Command-Line HFT Simulation
+### 2. Launch Institutional Trading Terminal
 ```bash
-# Run HFT simulation and swarm pipeline
+streamlit run app.py
+```
+Open your browser at `http://localhost:8501`.
+
+### 3. Run Command-Line Simulation & Deliverables
+```bash
 python main.py
 ```
 
-### 3. Run Microsecond Latency Benchmark
+### 4. Run Docker Container
 ```bash
-python tests/benchmark_latency.py
-```
+# Launch interactive Streamlit terminal via Docker Compose
+docker compose up terminal
 
-### 4. Run Unit Test Suite
-```bash
-pytest tests/ -v
+# Run microsecond latency benchmarks inside Docker
+docker compose run benchmark
 ```
 
 ---
 
-## Latency & Execution Benchmarks
+## Testing & Benchmarks
+
+### Microsecond Latency Benchmark Harness
+```bash
+python tests/benchmark_latency.py
+```
 
 Benchmarked on standard x86-64 hardware:
 
@@ -113,6 +134,11 @@ Benchmarked on standard x86-64 hardware:
 | **Avellaneda-Stoikov MM** | Optimal Bid/Ask Quote Generation | **15.09 us** | ~66,200 ops/sec |
 | **Mormyrid Swarm Cycle** | 28 Agents EOD + JAR + Consensus | **714.66 us** | ~1,400 cycles/sec |
 
+### Full Unit Test Suite (50 Tests)
+```bash
+pytest tests/ -v --cov=models --cov=analysis --cov=utils --cov=data
+```
+
 ---
 
 ## Project Structure
@@ -121,6 +147,14 @@ Benchmarked on standard x86-64 hardware:
 quantflow/
 ├── app.py                     # Institutional Streamlit Trading Terminal (5 Tabs)
 ├── main.py                    # Main Entry Point & Simulation Driver
+├── Dockerfile                 # Containerized Build Specification
+├── docker-compose.yml         # Container Orchestration (Terminal, Benchmark, Sim)
+├── CONTRIBUTING.md            # Contributor Guidelines & Development Standards
+├── CODE_OF_CONDUCT.md         # Contributor Covenant Code of Conduct
+├── .github/
+│   ├── workflows/ci.yml       # Automated CI with Lint, Pytest, Coverage & Benchmark
+│   ├── ISSUE_TEMPLATE/        # Standardized Bug & Feature Request Templates
+│   └── PULL_REQUEST_TEMPLATE.md # PR Quality & Validation Checklist
 ├── models/
 │   ├── swarm/                 # Biomimetic Mormyrid Swarm Intelligence
 │   │   ├── mormyrid_agent.py  # Scout, Predator, Schooler, Sentinel Fish Agents
@@ -138,18 +172,26 @@ quantflow/
 │   ├── risk/
 │   │   └── hft_risk.py        # Real-time VaR, CVaR, Sharpe, Drawdown, Limits
 │   ├── pricing/               # Classical Black-Scholes, Binomial, Monte Carlo
-│   ├── greeks/                # Greeks Sensitivity Calculators
+│   ├── greeks/                # Scaled Greeks Sensitivity Calculators
 │   └── acceleration.py        # Numba JIT & Vectorized Routines
+├── data/
+│   ├── realtime_feed.py       # Multi-Source Feed (Finage, Alpha Vantage, Marketstack, Binance)
+│   └── fetch_market_data.py   # Historical Data Caching Engine
 ├── tests/
 │   ├── test_swarm.py          # Swarm Intelligence Unit Tests
 │   ├── test_microstructure.py # LOB & Microstructure Signal Tests
 │   ├── test_hft_execution.py  # HFT Execution & Strategy Tests
-│   ├── test_models.py         # Classical Options Models Tests
+│   ├── test_models.py         # Classical Options Models & Scaled Greeks Tests
+│   ├── test_realtime_feed.py  # Realtime Feed & API Integration Tests
 │   └── benchmark_latency.py   # Microsecond Latency Benchmark Harness
 └── requirements.txt
 ```
 
 ---
+
+## Contributing
+
+Contributions are welcome. Please read [CONTRIBUTING.md](file:///n:/quantflow/CONTRIBUTING.md) and our [CODE_OF_CONDUCT.md](file:///n:/quantflow/CODE_OF_CONDUCT.md) before submitting pull requests.
 
 ## License
 MIT License. Open-source for quantitative research and algorithmic trading.

@@ -56,9 +56,9 @@ def benchmark_lob_engine(n_iterations: int = 5000):
     match_latency_us = (t1 - t0) / (500 * 1000.0)
 
     return {
-        "Order Insertion (μs)": round(insert_latency_us, 3),
-        "L2 Snapshot Build (μs)": round(snapshot_latency_us, 3),
-        "Market Order Matching (μs)": round(match_latency_us, 3),
+        "Order Insertion (us)": round(insert_latency_us, 3),
+        "L2 Snapshot Build (us)": round(snapshot_latency_us, 3),
+        "Market Order Matching (us)": round(match_latency_us, 3),
     }
 
 
@@ -77,7 +77,7 @@ def benchmark_microstructure_signals(n_iterations: int = 1000):
     signal_latency_us = (t1 - t0) / (n_iterations * 1000.0)
 
     return {
-        "Signals Pipeline (OFI + VPIN + Stoikov) (μs)": round(signal_latency_us, 3),
+        "Signals Pipeline (OFI + VPIN + Stoikov) (us)": round(signal_latency_us, 3),
     }
 
 
@@ -97,7 +97,7 @@ def benchmark_swarm_engine(n_iterations: int = 500):
     swarm_latency_us = (t1 - t0) / (n_iterations * 1000.0)
 
     return {
-        "Mormyrid Swarm Full Cycle (EOD + JAR + Consensus) (μs)": round(swarm_latency_us, 3),
+        "Mormyrid Swarm Full Cycle (EOD + JAR + Consensus) (us)": round(swarm_latency_us, 3),
     }
 
 
@@ -118,7 +118,7 @@ def benchmark_avellaneda_stoikov(n_iterations: int = 2000):
     as_latency_us = (t1 - t0) / (n_iterations * 1000.0)
 
     return {
-        "Swarm Avellaneda-Stoikov Quotes (μs)": round(as_latency_us, 3),
+        "Swarm Avellaneda-Stoikov Quotes (us)": round(as_latency_us, 3),
     }
 
 
@@ -129,20 +129,20 @@ if __name__ == "__main__":
 
     res_lob = benchmark_lob_engine()
     for k, v in res_lob.items():
-        print(f"  {k:<45}: {v:>8.3f} μs")
+        print(f"  {k:<45}: {v:>8.3f} us")
 
     res_sig = benchmark_microstructure_signals()
     for k, v in res_sig.items():
-        print(f"  {k:<45}: {v:>8.3f} μs")
+        print(f"  {k:<45}: {v:>8.3f} us")
 
     res_swarm = benchmark_swarm_engine()
     for k, v in res_swarm.items():
-        print(f"  {k:<45}: {v:>8.3f} μs")
+        print(f"  {k:<45}: {v:>8.3f} us")
 
     res_as = benchmark_avellaneda_stoikov()
     for k, v in res_as.items():
-        print(f"  {k:<45}: {v:>8.3f} μs")
+        print(f"  {k:<45}: {v:>8.3f} us")
 
     print("\n" + "="*70)
-    print("✓ All latency benchmarks completed within ultra-low latency tolerances.")
+    print("[OK] All latency benchmarks completed within ultra-low latency tolerances.")
     print("="*70 + "\n")
