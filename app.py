@@ -200,7 +200,12 @@ if 'active_ticker' not in st.session_state:
 @st.cache_data(ttl=30)
 def get_market_simulation_data(ticker: str, n_ticks: int = 300, seed: int = 42, provider_mode: str = "auto"):
     if provider_mode != "synthetic":
-        preferred = "marketstack" if "Marketstack" in provider_mode else "auto"
+        preferred = (
+            "finage" if "Finage" in provider_mode
+            else "alphavantage" if "Alpha" in provider_mode
+            else "marketstack" if "Marketstack" in provider_mode
+            else "auto"
+        )
         snapshots, df, quote = realtime_feed.get_market_stream(
             ticker=ticker,
             n_ticks=n_ticks,
@@ -210,8 +215,10 @@ def get_market_simulation_data(ticker: str, n_ticks: int = 300, seed: int = 42, 
         return snapshots, df, quote
     else:
         initial_prices = {
-            "NVDA": 140.0, "AAPL": 225.0, "TSLA": 210.0,
-            "MSFT": 420.0, "SPY": 560.0, "QQQ": 480.0, "BTC-USD": 62500.0, "ETH-USD": 3400.0
+            "NVDA": 210.0, "TSLA": 210.0, "AMD": 155.0, "PLTR": 35.0,
+            "SMCI": 450.0, "COIN": 220.0, "MSTR": 1450.0, "MARA": 18.5,
+            "SPY": 560.0, "QQQ": 480.0, "IWM": 220.0, "UVXY": 28.0,
+            "TQQQ": 72.0, "SQQQ": 9.5, "BTC-USD": 62500.0, "ETH-USD": 3400.0, "SOL-USD": 155.0
         }
         s0 = initial_prices.get(ticker, 140.0)
         snapshots, df = generate_synthetic_lob_stream(
@@ -299,9 +306,14 @@ def main():
     st.sidebar.markdown("### **QuantFlow Engine Controls**")
     
     ticker_choice = st.sidebar.selectbox(
-        "Target Instrument",
-        ["NVDA", "AAPL", "TSLA", "MSFT", "SPY", "QQQ", "BTC-USD", "ETH-USD"],
-        index=0
+        "HFT Target Instrument",
+        [
+            "NVDA", "TSLA", "AMD", "PLTR", "SMCI", "COIN", "MSTR", "MARA",
+            "SPY", "QQQ", "IWM", "UVXY", "TQQQ", "SQQQ",
+            "BTC-USD", "ETH-USD", "SOL-USD"
+        ],
+        index=0,
+        help="Select high-beta, ultra-liquid, or crypto HFT order book target."
     )
     st.session_state.active_ticker = ticker_choice
 
@@ -310,8 +322,10 @@ def main():
     provider_mode = st.sidebar.selectbox(
         "Market Data Source",
         [
-            "Auto (Marketstack + Binance L2 + Yahoo Live)",
-            "Marketstack API (Official Key)",
+            "Auto (Finage HFT + AlphaVantage + Marketstack + Binance)",
+            "Finage HFT Feed (Sub-Penny Spreads & Sizes)",
+            "Alpha Vantage Global Quote",
+            "Marketstack Institutional API",
             "Yahoo Finance Live",
             "Synthetic Simulation",
         ],
@@ -319,6 +333,10 @@ def main():
     )
     
     with st.sidebar.expander("API Key Configuration", expanded=False):
+        st.caption("Active Finage Key:")
+        st.code("API_KEY21M47UC168QB5XHKN884QA37EFA8JUOE", language="text")
+        st.caption("Active Alpha Vantage Key:")
+        st.code("IHY8ODEW8OI8X34S", language="text")
         st.caption("Active Marketstack Key:")
         st.code("24b40dae0167960b6bd3ec0ce5dfd4f9", language="text")
     

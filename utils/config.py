@@ -18,12 +18,23 @@ class Config:
     STRIKE: float = 140.0
     EXPIRY: str = "2026-04-17"
     
-    # Data settings
+    # Data settings & API Keys
     HISTORICAL_DAYS: int = 365  # 12 months
     CACHE_DIR: str = os.path.join(os.path.dirname(__file__), "..", "data", "cache")
     CACHE_TTL_HOURS: int = 24
     MARKETSTACK_API_KEY: str = os.getenv("MARKETSTACK_API_KEY", "24b40dae0167960b6bd3ec0ce5dfd4f9")
     MARKETSTACK_BASE_URL: str = "http://api.marketstack.com/v1"
+    ALPHAVANTAGE_API_KEY: str = os.getenv("ALPHAVANTAGE_API_KEY", "IHY8ODEW8OI8X34S")
+    ALPHAVANTAGE_BASE_URL: str = "https://www.alphavantage.co/query"
+    FINAGE_API_KEY: str = os.getenv("FINAGE_API_KEY", "API_KEY21M47UC168QB5XHKN884QA37EFA8JUOE")
+    FINAGE_BASE_URL: str = "https://api.finage.co.uk"
+    
+    # HFT Target Instruments
+    HFT_TICKERS: tuple = (
+        "NVDA", "TSLA", "AMD", "PLTR", "SMCI", "COIN", "MSTR", "MARA",
+        "SPY", "QQQ", "IWM", "UVXY", "TQQQ", "SQQQ",
+        "BTC-USD", "ETH-USD", "SOL-USD"
+    )
     
     # Pricing model parameters
     MC_SIMULATIONS: int = 100000

@@ -1,4 +1,4 @@
-"""Unit tests for free Real-Time Market Data Provider & Marketstack API."""
+"""Unit tests for free Real-Time Market Data Provider, Finage, Alpha Vantage & Marketstack APIs."""
 
 import os
 import sys
@@ -18,6 +18,42 @@ class TestRealtimeMarketFeed:
         assert "BTC-USD" in feed.CRYPTO_SYMBOLS
         assert "NVDA" in feed.EQUITY_DEFAULTS
         assert feed.marketstack_key == "24b40dae0167960b6bd3ec0ce5dfd4f9"
+        assert feed.alphavantage_key == "IHY8ODEW8OI8X34S"
+        assert feed.finage_key == "API_KEY21M47UC168QB5XHKN884QA37EFA8JUOE"
+
+    def test_finage_mocked_stock_quote(self):
+        feed = RealtimeMarketFeed()
+        mock_payload = b'{"symbol": "NVDA", "ask": 229.30, "asize": 200, "bid": 229.28, "bsize": 100, "timestamp": 1787851925271}'
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.code = 200
+        mock_resp.read.return_value = mock_payload
+        mock_resp.__enter__.return_value = mock_resp
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            quote = feed.fetch_finage_quote("NVDA")
+            assert quote is not None
+            assert quote.ticker == "NVDA"
+            assert quote.price == pytest.approx(229.29, abs=1e-2)
+            assert quote.bid == pytest.approx(229.28)
+            assert quote.ask == pytest.approx(229.30)
+            assert "Finage HFT" in quote.source
+
+    def test_alphavantage_mocked_quote(self):
+        feed = RealtimeMarketFeed()
+        mock_payload = b'{"Global Quote": {"01. symbol": "TSLA", "05. price": "210.50", "06. volume": "45000000"}}'
+        mock_resp = MagicMock()
+        mock_resp.status = 200
+        mock_resp.code = 200
+        mock_resp.read.return_value = mock_payload
+        mock_resp.__enter__.return_value = mock_resp
+
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            quote = feed.fetch_alphavantage_quote("TSLA")
+            assert quote is not None
+            assert quote.ticker == "TSLA"
+            assert quote.price == pytest.approx(210.50)
+            assert "Alpha Vantage" in quote.source
 
     def test_marketstack_mocked_quote(self):
         feed = RealtimeMarketFeed(marketstack_key="test_key")
