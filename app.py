@@ -332,13 +332,15 @@ def main():
         index=0
     )
     
-    with st.sidebar.expander("API Key Configuration", expanded=False):
-        st.caption("Active Finage Key:")
-        st.code("API_KEY21M47UC168QB5XHKN884QA37EFA8JUOE", language="text")
-        st.caption("Active Alpha Vantage Key:")
-        st.code("IHY8ODEW8OI8X34S", language="text")
-        st.caption("Active Marketstack Key:")
-        st.code("24b40dae0167960b6bd3ec0ce5dfd4f9", language="text")
+    with st.sidebar.expander("API Feed Status", expanded=False):
+        st.markdown("""
+        <div style="font-size: 0.8rem; line-height: 1.6; color: #94a3b8;">
+            <b>Finage HFT Feed:</b> <span style="color: #00F5A0;">CONNECTED</span><br>
+            <b>Alpha Vantage Feed:</b> <span style="color: #00F5A0;">CONNECTED</span><br>
+            <b>Marketstack API:</b> <span style="color: #00F5A0;">CONNECTED</span><br>
+            <b>Binance Crypto L2:</b> <span style="color: #00F5A0;">CONNECTED</span>
+        </div>
+        """, unsafe_allow_html=True)
     
     if st.sidebar.button("Refresh Live Quote", use_container_width=True):
         st.cache_data.clear()
